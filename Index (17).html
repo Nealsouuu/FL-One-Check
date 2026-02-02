@@ -1,0 +1,738 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Réception chantier – Lampadaires solaires</title>
+
+  <style>
+    :root { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial; }
+    body { margin: 0; background: #f6f7f9; }
+    header { padding: 16px; background: #111827; color: white; }
+    main { padding: 16px; max-width: 980px; margin: 0 auto; }
+    .card { background: white; border-radius: 12px; padding: 50px; margin-bottom: 12px; box-shadow: 0 2px 10px rgba(0,0,0,.06); }
+    .row { display: grid; grid-template-columns: 1fr 1fr; gap: 35px; }
+    @media (max-width: 720px){ .row { grid-template-columns: 1fr; } }
+
+    label { display: block; font-size: 12px; color: #374151; margin-bottom: 4px; }
+    input, select, textarea, button {
+      width: 100%; padding: 10px; border-radius: 10px; border: 1px solid #d1d5db; background: #fff;
+      font-size: 14px;
+    }
+    textarea { min-height: 70px; resize: vertical; }
+
+    .btnrow { display:flex; gap:10px; flex-wrap: wrap; }
+    .btn { cursor:pointer; border: 0; background:#111827; color:white; padding:10px 12px; border-radius:10px; width:auto; }
+    .btn.secondary { background:#374151; }
+    .btn.danger { background:#b91c1c; }
+
+    .pill { display:inline-block; padding:4px 10px; border-radius:999px; font-size:12px; }
+    .ok { background:#dcfce7; color:#166534; }
+    .warn { background:#ffedd5; color:#9a3412; }
+    .bad { background:#fee2e2; color:#991b1b; }
+
+    .point-head { display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap: wrap; }
+    .small { font-size:12px; color:#6b7280; }
+
+    .photos { display:flex; gap:10px; flex-wrap:wrap; margin-top:8px; }
+    .thumb { width:110px; border:1px solid #e5e7eb; border-radius:10px; overflow:hidden; background:#fff; }
+    .thumb img { display:block; width:100%; height:80px; object-fit:cover; }
+    .thumb div { font-size:11px; padding:6px; color:#374151; }
+
+    /* ===== Overlay export PDF ===== */
+    #pdfLoading {
+      position: fixed;
+      inset: 0;
+      background: rgba(17,24,39,.85);
+      color: white;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 9999;
+    }
+    #pdfLoading .box { text-align: center; }
+    #pdfLoading .spinner {
+      width: 42px;
+      height: 42px;
+      border: 4px solid rgba(255,255,255,.3);
+      border-top-color: white;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      margin: 0 auto 12px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+
+<body>
+<header>
+  <div style="max-width:980px;margin:0 auto; display:flex; align-items:center; gap:14px;">
+    <img src="logo.png" alt="Logo entreprise" style="height:48px; object-fit:contain;" />
+    <div>
+      <div style="font-weight:700;">Réception de chantier</div>
+      <div class="small">Fiche des points non conformes</div>
+    </div>
+  </div>
+</header>
+
+<main>
+  <!-- CHANTIER -->
+  <section class="card" id="chantierCard">
+    <h3 style="margin:0 0 10px 0;">1) Infos chantier</h3>
+
+    <div class="row">
+      <div>
+        <label>Projet / Affaire</label>
+        <input id="projet" placeholder="Ex: EP - Commune X - 2026" />
+      </div>
+
+      <div>
+        <label>Commune</label>
+        <input id="commune" placeholder="Ex: Nérac" />
+      </div>
+
+      <div>
+        <label>Adresse / Zone</label>
+        <input id="zone" placeholder="Ex: Rue X" />
+      </div>
+
+      <div>
+        <label>Date</label>
+        <input id="date" type="date" />
+      </div>
+
+      <div>
+        <label>Poseur</label>
+        <input id="soustraitant" placeholder="Nom entreprise" />
+      </div>
+
+      <div>
+        <label>Chef d’équipe</label>
+        <input id="chef" placeholder="Nom" />
+      </div>
+
+      <div>
+        <label>Contrôleur</label>
+        <select id="controleur">
+          <option value="">— Sélectionner —</option>
+          <option value="Neals Volante">Neals Volante</option>
+          <option value="Tony Diniz">Tony Diniz</option>
+          <option value="Quentin Gobbato">Quentin Gobbato</option>
+          <option value="Virgil Delbrel">Virgil Delbrel</option>
+          <option value="__autre__">Autre…</option>
+        </select>
+      </div>
+
+      <div id="controleurAutreWrap" style="display:none;">
+        <label>Nom du contrôleur</label>
+        <input id="controleurAutre" placeholder="Saisir le nom" />
+      </div>
+
+      <div>
+        <label>Nombre total de points (projet)</label>
+        <input id="nbTotalPoints" type="number" min="0" step="1" placeholder="Ex: 120" />
+      </div>
+    </div>
+
+    <div class="btnrow" style="margin-top:12px;">
+      <button class="btn" id="addPointBtn" type="button">➕ Ajouter un point non conforme</button>
+      <button class="btn secondary" id="pdfBtn" type="button">🧾 Exporter PDF</button>
+      <button class="btn danger" id="resetBtn" type="button">🗑️ Réinitialiser</button>
+    </div>
+  </section>
+
+  <!-- POINTS -->
+  <section id="pointsWrap"></section>
+
+  <!-- SYNTHESE + SIGNATURES -->
+  <section class="card" id="syntheseCard">
+    <h3 style="margin:0 0 10px 0;">2) Synthèse</h3>
+    <div id="syntheseText" class="small"></div>
+
+    <hr style="border:none;border-top:1px solid #e5e7eb;margin:14px 0;">
+
+    <h4 style="margin:0 0 10px 0;">Signatures</h4>
+
+    <div class="row">
+      <div>
+        <label>Contrôleur</label>
+        <canvas id="sigControleur" width="420" height="160"
+          style="border:1px solid #d1d5db;border-radius:10px;background:#fff; touch-action:none;"></canvas>
+        <div class="btnrow" style="margin-top:8px;">
+          <button class="btn danger" type="button" id="clearSigControleur">Effacer</button>
+        </div>
+      </div>
+
+      <div>
+        <label>Entreprise</label>
+        <canvas id="sigEntreprise" width="420" height="160"
+          style="border:1px solid #d1d5db;border-radius:10px;background:#fff; touch-action:none;"></canvas>
+        <div class="btnrow" style="margin-top:8px;">
+          <button class="btn danger" type="button" id="clearSigEntreprise">Effacer</button>
+        </div>
+      </div>
+
+      <div>
+        <label>Client</label>
+        <canvas id="sigClient" width="420" height="160"
+          style="border:1px solid #d1d5db;border-radius:10px;background:#fff; touch-action:none;"></canvas>
+        <div class="btnrow" style="margin-top:8px;">
+          <button class="btn danger" type="button" id="clearSigClient">Effacer</button>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<script>
+  // ===== Helpers =====
+  const LS_KEY = "reception_lampadaire_v1";
+  const byId = (id) => document.getElementById(id);
+
+  const todayISO = () => {
+    const d = new Date();
+    const pad = (n) => String(n).padStart(2, "0");
+    return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+  };
+
+  function escapeHtml(str){
+    return String(str ?? "")
+      .replaceAll("&","&amp;")
+      .replaceAll("<","&lt;")
+      .replaceAll(">","&gt;")
+      .replaceAll('"',"&quot;")
+      .replaceAll("'","&#039;");
+  }
+
+  const defaultPoint = () => ({
+    id: "id-" + Date.now().toString(36) + "-" + Math.random().toString(36).substring(2, 8),
+    numero: "",
+    repere: "",
+    lat: "",
+    lon: "",
+    reserves_txt: "",
+    photos: []
+  });
+
+  const statusClass = (s) => s === "Conforme" ? "ok" : (s === "Conforme avec réserves" ? "warn" : "bad");
+
+  // ===== State =====
+  let state = {
+    chantier: {
+      projet: "", commune: "", zone: "", date: todayISO(),
+      soustraitant: "", chef: "",
+      controleur: "", controleurAutre: "",
+      nbTotalPoints: 0,
+      signatures: { controleur:"", entreprise:"", client:"" }
+    },
+    points: [ defaultPoint() ]
+  };
+
+  // ===== Load/Save =====
+  const save = () => localStorage.setItem(LS_KEY, JSON.stringify(state));
+  const load = () => {
+    const raw = localStorage.getItem(LS_KEY);
+    if (!raw) return;
+    try {
+      const parsed = JSON.parse(raw);
+      if (parsed && parsed.chantier && Array.isArray(parsed.points)) state = parsed;
+    } catch(e) {}
+  };
+
+  const ensureSignatures = () => {
+    state.chantier.signatures ||= { controleur:"", entreprise:"", client:"" };
+    state.chantier.signatures.controleur ||= "";
+    state.chantier.signatures.entreprise ||= "";
+    state.chantier.signatures.client ||= "";
+  };
+
+  // ===== Render =====
+  const renderPoint = (p, idx) => {
+    const status = "Non conforme";
+    const pill = `<span class="pill ${statusClass(status)}">${status}</span>`;
+
+    return `
+      <section class="card" data-point-id="${p.id}">
+        <div class="point-head">
+          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+            <strong>Point ${idx+1}</strong> ${pill}
+            <span class="small">ID: ${p.id.slice(0,8)}</span>
+          </div>
+          <div class="btnrow">
+            <button class="btn secondary" type="button" data-action="gps">📍 GPS</button>
+            <button class="btn danger" type="button" data-action="remove">🗑️ Supprimer</button>
+          </div>
+        </div>
+
+        <div class="row" style="margin-top:10px;">
+          <div>
+            <label>N° point lumineux (obligatoire)</label>
+            <input value="${escapeHtml(p.numero)}" data-k="numero" placeholder="Ex: PL-12 / A22" />
+          </div>
+          <div>
+            <label>Adresse / repère</label>
+            <input value="${escapeHtml(p.repere)}" data-k="repere" placeholder="Ex: devant maison 24" />
+          </div>
+          <div>
+            <label>Latitude</label>
+            <input value="${escapeHtml(p.lat)}" data-k="lat" placeholder="Auto via bouton GPS" />
+          </div>
+          <div>
+            <label>Longitude</label>
+            <input value="${escapeHtml(p.lon)}" data-k="lon" placeholder="Auto via bouton GPS" />
+          </div>
+        </div>
+
+        <h4 style="margin:14px 0 8px 0;">Commentaire / non-conformité</h4>
+        <textarea data-k="reserves_txt" placeholder="Observations, anomalies…">${escapeHtml(p.reserves_txt)}</textarea>
+
+        <h4 style="margin:14px 0 8px 0;">Photos</h4>
+        <input type="file" accept="image/*" multiple data-action="addPhotos" />
+        <div class="small">Photos stockées localement</div>
+
+        <div class="photos">
+          ${(p.photos || []).map((ph, i) => `
+            <div class="thumb">
+              <img src="${ph.dataUrl}" alt="photo" />
+              <div>
+                Photo ${i+1}
+                <button class="btn danger" type="button"
+                  style="margin-top:6px;padding:6px 8px;font-size:12px;"
+                  data-action="rmPhoto" data-photo-idx="${i}">Suppr.</button>
+              </div>
+            </div>
+          `).join("")}
+        </div>
+      </section>
+    `;
+  };
+
+  const render = () => {
+    byId("projet").value = state.chantier.projet || "";
+    byId("commune").value = state.chantier.commune || "";
+    byId("zone").value = state.chantier.zone || "";
+    byId("date").value = state.chantier.date || todayISO();
+    byId("soustraitant").value = state.chantier.soustraitant || "";
+    byId("chef").value = state.chantier.chef || "";
+    byId("controleur").value = state.chantier.controleur || "";
+    byId("controleurAutre").value = state.chantier.controleurAutre || "";
+    byId("nbTotalPoints").value = String(state.chantier.nbTotalPoints ?? 0);
+
+    byId("controleurAutreWrap").style.display =
+      (state.chantier.controleur === "__autre__") ? "block" : "none";
+
+    byId("pointsWrap").innerHTML = state.points.map(renderPoint).join("");
+
+    const totalProjet = Number(state.chantier.nbTotalPoints || 0);
+    const nonConformes = state.points.length;
+    const conformes = Math.max(totalProjet - nonConformes, 0);
+    const ecart = totalProjet > 0 ? Math.max(nonConformes - totalProjet, 0) : 0;
+
+    byId("syntheseText").innerHTML = `
+      <div>Total points projet : <strong>${totalProjet}</strong></div>
+      <div>Points non conformes : <strong>${nonConformes}</strong></div>
+      <div>Points conformes : <strong>${conformes}</strong></div>
+      ${ecart ? `<div class="bad" style="margin-top:6px;">⚠️ Plus de non-conformes que le total projet</div>` : ""}
+    `;
+  };
+
+  // ===== Bind chantier =====
+  const bindChantier = () => {
+    const map = [
+      ["projet","projet"], ["commune","commune"], ["zone","zone"], ["date","date"],
+      ["soustraitant","soustraitant"], ["chef","chef"],
+      ["controleur","controleur"], ["nbTotalPoints","nbTotalPoints"]
+    ];
+
+    map.forEach(([id, key]) => {
+      const el = byId(id);
+      if (!el) return;
+
+      const apply = () => {
+        let v = el.value;
+        if (key === "nbTotalPoints") v = Number(v || 0);
+        state.chantier[key] = v;
+        save();
+        render();
+      };
+
+      el.addEventListener("input", apply);
+      el.addEventListener("change", apply);
+    });
+
+    const ctrlSelect = byId("controleur");
+    const ctrlOtherWrap = byId("controleurAutreWrap");
+    const ctrlOtherInput = byId("controleurAutre");
+
+    if (ctrlSelect && ctrlOtherWrap && ctrlOtherInput) {
+      ctrlSelect.addEventListener("change", () => {
+        const isOther = ctrlSelect.value === "__autre__";
+        ctrlOtherWrap.style.display = isOther ? "block" : "none";
+        if (!isOther) {
+          state.chantier.controleurAutre = "";
+          ctrlOtherInput.value = "";
+          save();
+          render();
+        }
+      });
+
+      ctrlOtherInput.addEventListener("input", () => {
+        state.chantier.controleurAutre = ctrlOtherInput.value;
+        save();
+      });
+    }
+  };
+
+  // ===== Points events =====
+  const fileToDataUrl = (file) => new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve(r.result);
+    r.onerror = reject;
+    r.readAsDataURL(file);
+  });
+
+  const handlePointsEvents = () => {
+    const wrap = byId("pointsWrap");
+
+    wrap.addEventListener("input", (e) => {
+      const card = e.target.closest("[data-point-id]");
+      if (!card) return;
+
+      const pid = card.getAttribute("data-point-id");
+      const p = state.points.find(x => x.id === pid);
+      if (!p) return;
+
+      const k = e.target.getAttribute("data-k");
+      if (!k) return;
+
+      p[k] = e.target.value;
+      save();
+    });
+
+    wrap.addEventListener("change", async (e) => {
+      const card = e.target.closest("[data-point-id]");
+      if (!card) return;
+
+      const pid = card.getAttribute("data-point-id");
+      const p = state.points.find(x => x.id === pid);
+      if (!p) return;
+
+      if (e.target.getAttribute("data-action") === "addPhotos") {
+        const files = Array.from(e.target.files || []);
+        for (const f of files) {
+          const dataUrl = await fileToDataUrl(f);
+          p.photos.push({ dataUrl });
+        }
+        e.target.value = "";
+        save();
+        render();
+      }
+    });
+
+    wrap.addEventListener("click", (e) => {
+      const btn = e.target.closest("button");
+      if (!btn) return;
+
+      const card = btn.closest("[data-point-id]");
+      if (!card) return;
+
+      const pid = card.getAttribute("data-point-id");
+      const action = btn.getAttribute("data-action");
+
+      if (action === "gps") {
+        const p = state.points.find(x => x.id === pid);
+        if (!p) return;
+
+        if (!navigator.geolocation) {
+          alert("Géolocalisation non disponible sur ce navigateur.");
+          return;
+        }
+
+        navigator.geolocation.getCurrentPosition(
+          (pos) => {
+            p.lat = String(pos.coords.latitude);
+            p.lon = String(pos.coords.longitude);
+            save();
+            render();
+          },
+          (err) => alert("GPS refusé ou indisponible : " + err.message),
+          { enableHighAccuracy: true, timeout: 10000 }
+        );
+        return;
+      }
+
+      if (action === "remove") {
+        if (state.points.length === 1) {
+          alert("Il faut au moins 1 point dans la fiche.");
+          return;
+        }
+        state.points = state.points.filter(x => x.id !== pid);
+        save();
+        render();
+        return;
+      }
+
+      if (action === "rmPhoto") {
+        const idx = Number(btn.getAttribute("data-photo-idx"));
+        const p = state.points.find(x => x.id === pid);
+        if (!p || Number.isNaN(idx)) return;
+
+        p.photos.splice(idx, 1);
+        save();
+        render();
+        return;
+      }
+    });
+  };
+
+  // ===== Signatures =====
+  const setupSignaturePad = (canvasId, clearBtnId, key) => {
+    const canvas = byId(canvasId);
+    const clearBtn = byId(clearBtnId);
+    if (!canvas || !clearBtn) return;
+
+    const ctx = canvas.getContext("2d");
+    ctx.lineWidth = 2;
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+
+    const existing = state.chantier.signatures?.[key];
+    if (existing) {
+      const img = new Image();
+      img.onload = () => {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      };
+      img.src = existing;
+    }
+
+    let drawing = false;
+
+    const getPos = (ev) => {
+      const rect = canvas.getBoundingClientRect();
+      const clientX = ev.touches ? ev.touches[0].clientX : ev.clientX;
+      const clientY = ev.touches ? ev.touches[0].clientY : ev.clientY;
+      return {
+        x: (clientX - rect.left) * (canvas.width / rect.width),
+        y: (clientY - rect.top) * (canvas.height / rect.height)
+      };
+    };
+
+    const start = (ev) => {
+      ev.preventDefault();
+      drawing = true;
+      const p = getPos(ev);
+      ctx.beginPath();
+      ctx.moveTo(p.x, p.y);
+    };
+
+    const move = (ev) => {
+      if (!drawing) return;
+      ev.preventDefault();
+      const p = getPos(ev);
+      ctx.lineTo(p.x, p.y);
+      ctx.stroke();
+    };
+
+    const end = (ev) => {
+      if (!drawing) return;
+      ev.preventDefault();
+      drawing = false;
+      state.chantier.signatures[key] = canvas.toDataURL("image/png");
+      save();
+    };
+
+    canvas.addEventListener("mousedown", start);
+    canvas.addEventListener("mousemove", move);
+    window.addEventListener("mouseup", end);
+
+    canvas.addEventListener("touchstart", start, { passive:false });
+    canvas.addEventListener("touchmove", move, { passive:false });
+    canvas.addEventListener("touchend", end, { passive:false });
+
+    clearBtn.addEventListener("click", () => {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      state.chantier.signatures[key] = "";
+      save();
+    });
+  };
+
+  const initSignatures = () => {
+    ensureSignatures();
+    setupSignaturePad("sigControleur", "clearSigControleur", "controleur");
+    setupSignaturePad("sigEntreprise", "clearSigEntreprise", "entreprise");
+    setupSignaturePad("sigClient", "clearSigClient", "client");
+  };
+
+  // ===== PDF (iPad friendly + overlay) =====
+  const exportPDF = () => {
+    const missing = state.points
+      .map((p, i) => (!String(p.numero || "").trim() ? `Point ${i+1}` : null))
+      .filter(Boolean);
+
+    if (missing.length) {
+      alert("Numéro obligatoire manquant pour : " + missing.join(", "));
+      return;
+    }
+
+    const sigs = state.chantier.signatures || {};
+    if (!sigs.controleur || !sigs.entreprise || !sigs.client) {
+      alert("Il manque une ou plusieurs signatures (Contrôleur / Entreprise / Client).");
+      return;
+    }
+
+    const controleurNom =
+      state.chantier.controleur === "__autre__"
+        ? (state.chantier.controleurAutre || "")
+        : (state.chantier.controleur || "");
+
+    const html = `
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <title>PV Réception</title>
+  <style>
+    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;margin:20px;line-height:1.35;}
+    table{width:100%;border-collapse:collapse;font-size:12px;}
+    th,td{border:1px solid #ddd;padding:8px;vertical-align:top;}
+    th{background:#f3f4f6;text-align:left;}
+    .bad{background:#fee2e2;color:#991b1b;font-weight:700;}
+  </style>
+</head>
+<body>
+  <div style="border-bottom:2px solid #111827;padding-bottom:10px;margin-bottom:16px;">
+    <h1 style="margin:0;">PV – Points non conformes (lampadaires solaires)</h1>
+    <div style="font-size:12px;color:#555;">
+      Commune : <strong>${escapeHtml(state.chantier.commune)}</strong> |
+      Date : <strong>${escapeHtml(state.chantier.date)}</strong><br>
+      Projet : <strong>${escapeHtml(state.chantier.projet)}</strong><br>
+      Poseur : <strong>${escapeHtml(state.chantier.soustraitant)}</strong> |
+      Contrôleur : <strong>${escapeHtml(controleurNom)}</strong>
+    </div>
+  </div>
+
+  <table>
+    <thead>
+      <tr>
+        <th style="width:6%;">#</th>
+        <th style="width:16%;">N° point</th>
+        <th style="width:58%;">Non-conformité / Observation</th>
+        <th style="width:20%;">Localisation</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${state.points.map((p,i)=>`
+        <tr>
+          <td>${i+1}</td>
+          <td><strong>${escapeHtml(p.numero)}</strong><br><span class="bad">NON CONFORME</span></td>
+          <td class="bad">${escapeHtml(p.reserves_txt || "—")}</td>
+          <td>
+            ${escapeHtml(p.repere || "")}<br>
+            <span style="font-size:11px;color:#555;">
+              ${escapeHtml(p.lat || "")} ${p.lat && p.lon ? "•" : ""} ${escapeHtml(p.lon || "")}
+            </span>
+          </td>
+        </tr>
+      `).join("")}
+    </tbody>
+  </table>
+
+  <h2 style="margin-top:16px;">Signatures</h2>
+  <table style="width:100%;border-collapse:collapse;">
+    <tr>
+      <td style="width:33%;padding:8px;border:1px solid #ddd;">
+        <strong>Contrôleur</strong><br>
+        ${sigs.controleur ? `<img src="${sigs.controleur}" style="width:100%;max-height:140px;object-fit:contain;border:1px solid #ddd;border-radius:8px;">` : `<em>Non signée</em>`}
+      </td>
+      <td style="width:33%;padding:8px;border:1px solid #ddd;">
+        <strong>Entreprise</strong><br>
+        ${sigs.entreprise ? `<img src="${sigs.entreprise}" style="width:100%;max-height:140px;object-fit:contain;border:1px solid #ddd;border-radius:8px;">` : `<em>Non signée</em>`}
+      </td>
+      <td style="width:33%;padding:8px;border:1px solid #ddd;">
+        <strong>Client</strong><br>
+        ${sigs.client ? `<img src="${sigs.client}" style="width:100%;max-height:140px;object-fit:contain;border:1px solid #ddd;border-radius:8px;">` : `<em>Non signée</em>`}
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
+
+    const overlay = byId("pdfLoading");
+    overlay.style.display = "flex";
+
+    const original = document.body.innerHTML;
+
+    setTimeout(() => {
+      document.body.innerHTML = html;
+      window.print();
+
+      setTimeout(() => {
+        document.body.innerHTML = original;
+        overlay.style.display = "none";
+
+        render();
+        bindChantier();
+        handlePointsEvents();
+        bindButtons();
+        initSignatures();
+      }, 700);
+    }, 250);
+  };
+
+  // ===== Buttons =====
+  const bindButtons = () => {
+    byId("addPointBtn").addEventListener("click", () => {
+      state.points.push(defaultPoint());
+      save();
+      render();
+      window.scrollTo({ top: document.body.scrollHeight, behavior: "smooth" });
+    });
+
+    byId("pdfBtn").addEventListener("click", exportPDF);
+
+    byId("resetBtn").addEventListener("click", () => {
+      if (!confirm("Tout effacer ? (Les données locales seront supprimées)")) return;
+
+      localStorage.removeItem(LS_KEY);
+      state = {
+        chantier: {
+          projet: "", commune: "", zone: "", date: todayISO(),
+          soustraitant: "", chef: "",
+          controleur: "", controleurAutre: "",
+          nbTotalPoints: 0,
+          signatures: { controleur:"", entreprise:"", client:"" }
+        },
+        points: [ defaultPoint() ]
+      };
+
+      save();
+      render();
+      initSignatures();
+    });
+  };
+
+  // ===== Init =====
+  load();
+  if (!state.chantier.date) state.chantier.date = todayISO();
+  if (!state.points.length) state.points = [ defaultPoint() ];
+  ensureSignatures();
+
+  bindChantier();
+  handlePointsEvents();
+  bindButtons();
+  render();
+  save();
+  initSignatures();
+</script>
+
+<!-- Overlay -->
+<div id="pdfLoading">
+  <div class="box">
+    <div class="spinner"></div>
+    <div>Génération du PDF…</div>
+  </div>
+</div>
+
+</body>
+</html>
