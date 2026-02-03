@@ -2,6 +2,7 @@
 <html lang="fr">
 <head>
   <meta charset="utf-8" />
+  <base href="${location.href}">
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Réception chantier – Lampadaires solaires</title>
 
@@ -630,6 +631,9 @@
     th{background:#f3f4f6;text-align:left;}
     .bad{background:#fee2e2;color:#991b1b;font-weight:700;}
     .nowrap{white-space:nowrap;}
+    .pics{display:flex;gap:6px;flex-wrap:wrap;}
+    .pic{width:48px;height:48px;object-fit:cover;border:1px solid #ddd;border-radius:6px;}
+    .more{font-size:11px;color:#555;align-self:center;}
     @media print {
       body{margin:14mm;}
       thead{display:table-header-group;}
@@ -658,32 +662,52 @@
         <th style="width:4%;">#</th>
         <th style="width:12%;">N° point</th>
         <th style="width:36%;">Non-conformité / Observation</th>
+        <th style="width:18%;">Photos</th>
         <th style="width:18%;">Localisation</th>
         <th style="width:12%;" class="nowrap">Date de reprise</th>
         <th style="width:18%;">Statut</th>
       </tr>
     </thead>
     <tbody>
-      ${state.points.map((p,i)=>{
-        const statutTxt = (p.statut === "Autre") ? (p.statut_autre || "Autre") : (p.statut || "");
-        return `
-        <tr>
-          <td>${i+1}</td>
-          <td><strong>${escapeHtml(p.numero)}</strong></td>
-          <td class="bad">${escapeHtml(p.reserves_txt || "—")}</td>
-          <td>
-            ${escapeHtml(p.repere || "")}<br>
-            <span style="font-size:11px;color:#555;">
-              ${escapeHtml(p.lat || "")} ${(p.lat && p.lon) ? "•" : ""} ${escapeHtml(p.lon || "")}
-            </span>
-          </td>
-          <td class="nowrap">${escapeHtml(p.date_reprise || "")}</td>
-          <td>${escapeHtml(statutTxt)}</td>
-        </tr>`;
-      }).join("")}
-    </tbody>
-  </table>
+  ${state.points.map((p,i)=>{
+    const statutTxt = (p.statut === "Autre")
+      ? (p.statut_autre || "Autre")
+      : (p.statut || "");
 
+    const photos = (p.photos || []);
+    const first3 = photos.slice(0, 3);
+
+    return `
+    <tr>
+      <td>${i+1}</td>
+
+      <td><strong>${escapeHtml(p.numero)}</strong></td>
+
+      <td class="bad">${escapeHtml(p.reserves_txt || "—")}</td>
+
+      <td>
+        <div class="pics">
+          ${first3.map(ph => `
+            <img class="pic" src="${ph.dataUrl}" alt="photo">
+          `).join("")}
+          ${(photos.length > 3) ? `<div class="more">+${photos.length - 3}</div>` : ""}
+        </div>
+      </td>
+
+      <td>
+        ${escapeHtml(p.repere || "")}<br>
+        <span style="font-size:11px;color:#555;">
+          ${escapeHtml(p.lat || "")} ${(p.lat && p.lon) ? "•" : ""} ${escapeHtml(p.lon || "")}
+        </span>
+      </td>
+
+      <td class="nowrap">${escapeHtml(p.date_reprise || "")}</td>
+
+      <td>${escapeHtml(statutTxt)}</td>
+    </tr>`;
+  }).join("")}
+</tbody>
+  </table>
   <h2 style="margin-top:16px;">Signatures</h2>
   <table style="width:100%;border-collapse:collapse;">
     <tr>
@@ -705,7 +729,9 @@
 </html>`;
   };
 
-  const exportPDF = () => {
+const exportPDF = () => {
+  try {
+    // 1) Vérif numéros obligatoires
     const missing = state.points
       .map((p, i) => (!String(p.numero || "").trim() ? `Point ${i+1}` : null))
       .filter(Boolean);
@@ -715,66 +741,77 @@
       return;
     }
 
+    // 2) Vérif signatures
     const sigs = state.chantier.signatures || {};
     if (!sigs.controleur || !sigs.entreprise || !sigs.client) {
       alert("Il manque une ou plusieurs signatures (Contrôleur / Entreprise / Client).");
       return;
     }
 
+    // 3) Overlay ON
     const overlay = byId("pdfLoading");
-    overlay.style.display = "flex";
+    if (overlay) overlay.style.display = "flex";
 
+    // 4) Nettoyage overlay (quand on revient sur l’app)
     let cleaned = false;
     const cleanup = () => {
       if (cleaned) return;
       cleaned = true;
-      overlay.style.display = "none";
-      window.removeEventListener("focus", cleanup);
+      if (overlay) overlay.style.display = "none";
     };
 
+    // iPad : quand tu fermes l’aperçu, le focus revient => on coupe l’overlay
     window.addEventListener("focus", cleanup, { once: true });
-    setTimeout(cleanup, 6000);
+    // Sécurité si iOS ne renvoie pas focus
+    setTimeout(cleanup, 7000);
 
+    // 5) HTML PDF
     const html = buildPdfHtml();
 
+    // 6) Iframe d’impression (stable iOS avec srcdoc)
     let frame = document.getElementById("printFrame");
     if (!frame) {
       frame = document.createElement("iframe");
       frame.id = "printFrame";
       frame.style.position = "fixed";
-      frame.style.right = "0";
-      frame.style.bottom = "0";
-      frame.style.width = "0";
-      frame.style.height = "0";
+      frame.style.left = "-9999px";
+      frame.style.top = "0";
+      frame.style.width = "1px";
+      frame.style.height = "1px";
       frame.style.border = "0";
       document.body.appendChild(frame);
     }
 
-    const doc = frame.contentWindow.document;
-    doc.open();
-    doc.write(html);
-    doc.close();
-
     const doPrint = () => {
-  try {
-    cleanup(); // enlève l’overlay AVANT print
+      try {
+        // IMPORTANT : on enlève l’overlay avant d’ouvrir l’aperçu print
+        cleanup();
 
-    const win = frame.contentWindow;
-    win.focus();
+        // Certains iOS ont besoin d’un petit délai
+        setTimeout(() => {
+          frame.contentWindow.focus();
+          frame.contentWindow.print();
+        }, 150);
+      } catch (e) {
+        cleanup();
+        alert("Impression impossible : " + e.message);
+      }
+    };
 
-    // 🔥 Safari iPad a besoin d’un petit délai
-    setTimeout(() => {
-      win.print();
-    }, 300);
+    // ✅ Méthode iOS stable
+    frame.onload = doPrint;
+    frame.srcdoc = html;
 
-  } catch (e) {
-    cleanup();
-    alert("Impression impossible : " + e.message);
+    // Fallback si onload ne part pas
+    setTimeout(doPrint, 1000);
+
+  } catch (err) {
+    // Si une erreur JS casse tout, tu la vois au moins
+    alert("Erreur export PDF : " + (err && err.message ? err.message : err));
+    const overlay = byId("pdfLoading");
+    if (overlay) overlay.style.display = "none";
   }
 };
-
-    setTimeout(doPrint, 500);
-  };
 
   // ===== Buttons =====
   const bindButtons = () => {
