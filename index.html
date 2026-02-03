@@ -2,7 +2,6 @@
 <html lang="fr">
 <head>
   <meta charset="utf-8" />
-  <base href="${location.href}">
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Réception chantier – Lampadaires solaires</title>
 
@@ -619,6 +618,7 @@
 <html lang="fr">
 <head>
   <meta charset="utf-8">
+  <base href="${location.href}">
   <title>PV Réception</title>
   <style>
     body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;margin:22px;line-height:1.35;}
@@ -781,8 +781,10 @@ const exportPDF = () => {
       frame.style.border = "0";
       document.body.appendChild(frame);
     }
-
+    let printed = false;
     const doPrint = () => {
+      if (printed) return;
+  printed = true;
       try {
         // IMPORTANT : on enlève l’overlay avant d’ouvrir l’aperçu print
         cleanup();
