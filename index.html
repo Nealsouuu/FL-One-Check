@@ -618,7 +618,6 @@
 <html lang="fr">
 <head>
   <meta charset="utf-8">
-  <base href="${location.href}">
   <title>PV Réception</title>
   <style>
     body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;margin:22px;line-height:1.35;}
@@ -757,15 +756,22 @@
     doc.close();
 
     const doPrint = () => {
-      try {
-        cleanup();
-        frame.contentWindow.focus();
-        frame.contentWindow.print();
-      } catch (e) {
-        cleanup();
-        alert("Impression impossible : " + e.message);
-      }
-    };
+  try {
+    cleanup(); // enlève l’overlay AVANT print
+
+    const win = frame.contentWindow;
+    win.focus();
+
+    // 🔥 Safari iPad a besoin d’un petit délai
+    setTimeout(() => {
+      win.print();
+    }, 300);
+
+  } catch (e) {
+    cleanup();
+    alert("Impression impossible : " + e.message);
+  }
+};
 
     setTimeout(doPrint, 500);
   };
