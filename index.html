@@ -634,6 +634,7 @@
     .pics{display:flex;gap:6px;flex-wrap:wrap;}
     .pic{width:48px;height:48px;object-fit:cover;border:1px solid #ddd;border-radius:6px;}
     .more{font-size:11px;color:#555;align-self:center;}
+    @page { size: A4; margin: 12mm; }
     @media print {
       body{margin:14mm;}
       thead{display:table-header-group;}
@@ -729,7 +730,18 @@
 </html>`;
   };
 
-const exportPDF = () => {
+const waitForImages = async (doc) => {
+  const imgs = Array.from(doc.images || []);
+  await Promise.all(imgs.map(img => {
+    if (img.complete && img.naturalWidth > 0) return Promise.resolve();
+    return new Promise(resolve => {
+      img.onload = () => resolve();
+      img.onerror = () => resolve(); // on ne bloque pas si une image fail
+    });
+  }));
+};
+
+const exportPDF = async () => {
   try {
     // 1) Vérif numéros obligatoires
     const missing = state.points
@@ -752,7 +764,6 @@ const exportPDF = () => {
     const overlay = byId("pdfLoading");
     if (overlay) overlay.style.display = "flex";
 
-    // 4) Nettoyage overlay (quand on revient sur l’app)
     let cleaned = false;
     const cleanup = () => {
       if (cleaned) return;
@@ -760,15 +771,10 @@ const exportPDF = () => {
       if (overlay) overlay.style.display = "none";
     };
 
-    // iPad : quand tu fermes l’aperçu, le focus revient => on coupe l’overlay
-    window.addEventListener("focus", cleanup, { once: true });
-    // Sécurité si iOS ne renvoie pas focus
-    setTimeout(cleanup, 7000);
-
-    // 5) HTML PDF
+    // 4) HTML PDF
     const html = buildPdfHtml();
 
-    // 6) Iframe d’impression (stable iOS avec srcdoc)
+    // 5) Créer iframe
     let frame = document.getElementById("printFrame");
     if (!frame) {
       frame = document.createElement("iframe");
@@ -781,34 +787,31 @@ const exportPDF = () => {
       frame.style.border = "0";
       document.body.appendChild(frame);
     }
-    let printed = false;
-    const doPrint = () => {
-      if (printed) return;
-  printed = true;
-      try {
-        // IMPORTANT : on enlève l’overlay avant d’ouvrir l’aperçu print
-        cleanup();
 
-        // Certains iOS ont besoin d’un petit délai
-        setTimeout(() => {
-          frame.contentWindow.focus();
-          frame.contentWindow.print();
-        }, 150);
-      } catch (e) {
-        cleanup();
-        alert("Impression impossible : " + e.message);
-      }
-    };
+    // 6) Écrire le HTML via document.write (plus stable iOS que srcdoc)
+    const doc = frame.contentWindow.document;
+    doc.open();
+    doc.write(html);
+    doc.close();
 
-    // ✅ Méthode iOS stable
-    frame.onload = doPrint;
-    frame.srcdoc = html;
+    // 7) Attendre que tout soit prêt (images + mise en page)
+    await waitForImages(doc);
 
-    // Fallback si onload ne part pas
-    setTimeout(doPrint, 1000);
+    // iOS : petit délai pour être sûr que le layout est calculé
+    await new Promise(r => setTimeout(r, 200));
+
+    // 8) IMPORTANT : retirer overlay juste avant print
+    cleanup();
+
+    // 9) Print iframe
+    frame.contentWindow.focus();
+    frame.contentWindow.print();
+
+    // 10) sécurité : si iOS ne renvoie pas focus, on enlève overlay quand même
+    window.addEventListener("focus", cleanup, { once: true });
+    setTimeout(cleanup, 4000);
 
   } catch (err) {
-    // Si une erreur JS casse tout, tu la vois au moins
     alert("Erreur export PDF : " + (err && err.message ? err.message : err));
     const overlay = byId("pdfLoading");
     if (overlay) overlay.style.display = "none";
@@ -852,7 +855,6 @@ const exportPDF = () => {
   if (!state.chantier.date) state.chantier.date = todayISO();
   if (!state.points.length) state.points = [ defaultPoint() ];
   ensureSignatures();
-
   bindChantier();
   handlePointsEvents();
   bindButtons();
@@ -860,6 +862,5 @@ const exportPDF = () => {
   save();
   initSignatures();
 </script>
-
 </body>
 </html>
