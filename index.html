@@ -222,6 +222,9 @@
     date_reprise: "",
     statut: "A reprendre",
     statut_autre: "",
+    date_reprise: "",
+    statut: "",
+    statut_autre: "",
     photos: []
   });
 
@@ -274,6 +277,28 @@
             <strong>Point ${idx+1}</strong> ${pill}
             <span class="small">ID: ${p.id.slice(0,8)}</span>
           </div>
+          <div class="row" style="margin-top:10px;">
+          <div>
+            <label>Date de reprise</label>
+            <input type="date" value="${escapeHtml(p.date_reprise || "")}" data-k="date_reprise" />
+          </div>
+
+          <div>
+            <label>Statut</label>
+            <select data-k="statut">
+              <option value="" ${!p.statut ? "selected" : ""}>—</option>
+              <option value="À reprendre" ${p.statut==="À reprendre"?"selected":""}>À reprendre</option>
+              <option value="En cours" ${p.statut==="En cours"?"selected":""}>En cours</option>
+              <option value="Repris" ${p.statut==="Repris"?"selected":""}>Repris</option>
+              <option value="Autre" ${p.statut==="Autre"?"selected":""}>Autre…</option>
+            </select>
+
+            <div style="margin-top:8px; ${p.statut==="Autre" ? "" : "display:none;"}" data-k-wrap="statut_autre">
+              <label>Statut (autre)</label>
+              <input value="${escapeHtml(p.statut_autre || "")}" data-k="statut_autre" placeholder="Saisir…" />
+            </div>
+          </div>
+        </div>
           <div class="btnrow">
             <button class="btn secondary" type="button" data-action="gps">📍 GPS</button>
             <button class="btn danger" type="button" data-action="remove">🗑️ Supprimer</button>
@@ -630,6 +655,7 @@
 <html lang="fr">
 <head>
   <meta charset="utf-8">
+  <base href="${location.href}">
   <title>PV Réception</title>
   <style>
     body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;margin:22px;line-height:1.35;}
@@ -681,7 +707,7 @@
         return `
         <tr>
           <td>${i+1}</td>
-          <td><strong>${escapeHtml(p.numero)}</strong><br><span class="bad">NON CONFORME</span></td>
+          <td><strong>${escapeHtml(p.numero)}</strong></td>
           <td class="bad">${escapeHtml(p.reserves_txt || "—")}</td>
           <td>
             ${escapeHtml(p.repere || "")}<br>
@@ -717,53 +743,82 @@
 </html>`;
   };
 
-  const exportPDF = () => {
-    const missing = state.points
-      .map((p, i) => (!String(p.numero || "").trim() ? `Point ${i+1}` : null))
-      .filter(Boolean);
+const exportPDF = () => {
+  // 1) Vérif numéros obligatoires
+  const missing = state.points
+    .map((p, i) => (!String(p.numero || "").trim() ? `Point ${i+1}` : null))
+    .filter(Boolean);
 
-    if (missing.length) {
-      alert("Numéro obligatoire manquant pour : " + missing.join(", "));
-      return;
-    }
+  if (missing.length) {
+    alert("Numéro obligatoire manquant pour : " + missing.join(", "));
+    return;
+  }
 
-    const sigs = state.chantier.signatures || {};
-    if (!sigs.controleur || !sigs.entreprise || !sigs.client) {
-      alert("Il manque une ou plusieurs signatures (Contrôleur / Entreprise / Client).");
-      return;
-    }
+  // 2) Vérif signatures
+  const sigs = state.chantier.signatures || {};
+  if (!sigs.controleur || !sigs.entreprise || !sigs.client) {
+    alert("Il manque une ou plusieurs signatures (Contrôleur / Entreprise / Client).");
+    return;
+  }
 
-    const overlay = byId("pdfLoading");
-    overlay.style.display = "flex";
+  // 3) Affiche overlay
+  const overlay = byId("pdfLoading");
+  if (overlay) overlay.style.display = "flex";
 
-    const html = buildPdfHtml();
+  // 4) Fonction cleanup (retour app normal)
+  let cleaned = false;
+  const cleanup = () => {
+    if (cleaned) return;
+    cleaned = true;
+    if (overlay) overlay.style.display = "none";
+    window.removeEventListener("focus", cleanup);
+  };
 
-    // iframe cachée
-    let frame = document.getElementById("printFrame");
-    if (!frame) {
-      frame = document.createElement("iframe");
-      frame.id = "printFrame";
-      frame.style.position = "fixed";
-      frame.style.right = "0";
-      frame.style.bottom = "0";
-      frame.style.width = "0";
-      frame.style.height = "0";
-      frame.style.border = "0";
-      document.body.appendChild(frame);
-    }
+  // 5) Sur iPad: quand tu fermes l’aperçu -> focus revient -> on enlève l’overlay
+  window.addEventListener("focus", cleanup, { once: true });
 
-    const doc = frame.contentWindow.document;
-    doc.open();
-    doc.write(html);
-    doc.close();
+  // 6) Filet de sécurité si Safari ne déclenche pas focus
+  setTimeout(cleanup, 6000);
 
-    // laisser le temps aux images (logo, signatures) de se charger
-    setTimeout(() => {
-      overlay.style.display = "none";
+  // 7) HTML PDF
+  const html = buildPdfHtml();
+
+  // 8) Création / récupération d’une iframe cachée
+  let frame = document.getElementById("printFrame");
+  if (!frame) {
+    frame = document.createElement("iframe");
+    frame.id = "printFrame";
+    frame.style.position = "fixed";
+    frame.style.right = "0";
+    frame.style.bottom = "0";
+    frame.style.width = "0";
+    frame.style.height = "0";
+    frame.style.border = "0";
+    document.body.appendChild(frame);
+  }
+
+  // 9) Injecter le HTML dans l’iframe
+  const doc = frame.contentWindow.document;
+  doc.open();
+  doc.write(html);
+  doc.close();
+
+  // 10) Lancer l’impression
+  const doPrint = () => {
+    try {
+      cleanup(); // très important: enlève l’overlay AVANT print
       frame.contentWindow.focus();
       frame.contentWindow.print();
-    }, 500);
+    } catch (e) {
+      cleanup();
+      alert("Impression impossible : " + e.message);
+    }
   };
+
+  // 11) Certains iPad ne déclenchent pas toujours onload => fallback
+  frame.onload = doPrint;
+  setTimeout(doPrint, 500);
+};
 
   // ===== Buttons =====
   const bindButtons = () => {
@@ -813,3 +868,4 @@
 
 </body>
 </html>
+
