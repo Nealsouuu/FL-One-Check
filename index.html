@@ -184,6 +184,14 @@
   </section>
 </main>
 
+<!-- Overlay -->
+<div id="pdfLoading">
+  <div class="box">
+    <div class="spinner"></div>
+    <div>Génération du PDF…</div>
+  </div>
+</div>
+
 <script>
   // ===== Helpers =====
   const LS_KEY = "reception_lampadaire_v1";
@@ -211,6 +219,9 @@
     lat: "",
     lon: "",
     reserves_txt: "",
+    date_reprise: "",
+    statut: "A reprendre",
+    statut_autre: "",
     photos: []
   });
 
@@ -250,6 +261,11 @@
   const renderPoint = (p, idx) => {
     const status = "Non conforme";
     const pill = `<span class="pill ${statusClass(status)}">${status}</span>`;
+    const showOther = (p.statut === "Autre");
+
+    const statutLabel = (p.statut === "Autre")
+      ? (p.statut_autre || "Autre")
+      : (p.statut || "");
 
     return `
       <section class="card" data-point-id="${p.id}">
@@ -280,6 +296,26 @@
           <div>
             <label>Longitude</label>
             <input value="${escapeHtml(p.lon)}" data-k="lon" placeholder="Auto via bouton GPS" />
+          </div>
+        </div>
+
+        <div class="row" style="margin-top:10px;">
+          <div>
+            <label>Date de reprise</label>
+            <input type="date" value="${escapeHtml(p.date_reprise)}" data-k="date_reprise" />
+          </div>
+          <div>
+            <label>Statut</label>
+            <select data-k="statut">
+              <option value="A reprendre" ${p.statut==="A reprendre"?"selected":""}>À reprendre</option>
+              <option value="En attente" ${p.statut==="En attente"?"selected":""}>En attente</option>
+              <option value="Repris" ${p.statut==="Repris"?"selected":""}>Repris</option>
+              <option value="Autre" ${p.statut==="Autre"?"selected":""}>Autre…</option>
+            </select>
+            <div style="margin-top:8px; display:${showOther ? "block" : "none"}">
+              <input value="${escapeHtml(p.statut_autre)}" data-k="statut_autre" placeholder="Saisir le statut" />
+            </div>
+            <div class="small" style="margin-top:6px;">Actuel : <strong>${escapeHtml(statutLabel)}</strong></div>
           </div>
         </div>
 
@@ -417,6 +453,7 @@
       const p = state.points.find(x => x.id === pid);
       if (!p) return;
 
+      // fichiers photo
       if (e.target.getAttribute("data-action") === "addPhotos") {
         const files = Array.from(e.target.files || []);
         for (const f of files) {
@@ -425,6 +462,16 @@
         }
         e.target.value = "";
         save();
+        render();
+        return;
+      }
+
+      // select statut: si on quitte "Autre", on vide statut_autre
+      if (e.target.getAttribute("data-k") === "statut") {
+        if (p.statut !== "Autre") {
+          p.statut_autre = "";
+          save();
+        }
         render();
       }
     });
@@ -564,65 +611,74 @@
     setupSignaturePad("sigClient", "clearSigClient", "client");
   };
 
-  // ===== PDF (iPad friendly + overlay) =====
-  const exportPDF = () => {
-    const missing = state.points
-      .map((p, i) => (!String(p.numero || "").trim() ? `Point ${i+1}` : null))
-      .filter(Boolean);
-
-    if (missing.length) {
-      alert("Numéro obligatoire manquant pour : " + missing.join(", "));
-      return;
-    }
-
+  // ===== PDF (stable iPad) via iframe =====
+  const buildPdfHtml = () => {
     const sigs = state.chantier.signatures || {};
-    if (!sigs.controleur || !sigs.entreprise || !sigs.client) {
-      alert("Il manque une ou plusieurs signatures (Contrôleur / Entreprise / Client).");
-      return;
-    }
 
     const controleurNom =
       state.chantier.controleur === "__autre__"
         ? (state.chantier.controleurAutre || "")
         : (state.chantier.controleur || "");
 
-    const html = `
-<!doctype html>
+    // Logo: si tu mets un const LOGO_BASE64 = "data:image/png;base64,...";
+    // il sera utilisé. Sinon => logo.png
+    const logoSrc = (typeof LOGO_BASE64 !== "undefined" && String(LOGO_BASE64).startsWith("data:"))
+      ? LOGO_BASE64
+      : "logo.png";
+
+    return `<!doctype html>
 <html lang="fr">
 <head>
   <meta charset="utf-8">
   <title>PV Réception</title>
   <style>
-    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;margin:20px;line-height:1.35;}
+    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;margin:22px;line-height:1.35;}
+    .header{display:flex;gap:14px;align-items:center;border-bottom:2px solid #111827;padding-bottom:10px;margin-bottom:16px;}
+    .header img{height:46px;object-fit:contain;}
+    h1{margin:0;font-size:18px;}
+    .meta{font-size:12px;color:#555;margin-top:4px;}
     table{width:100%;border-collapse:collapse;font-size:12px;}
     th,td{border:1px solid #ddd;padding:8px;vertical-align:top;}
     th{background:#f3f4f6;text-align:left;}
     .bad{background:#fee2e2;color:#991b1b;font-weight:700;}
+    .nowrap{white-space:nowrap;}
+    @media print {
+      body{margin:14mm;}
+      thead{display:table-header-group;}
+      tr{page-break-inside:avoid;}
+    }
   </style>
 </head>
 <body>
-  <div style="border-bottom:2px solid #111827;padding-bottom:10px;margin-bottom:16px;">
-    <h1 style="margin:0;">PV – Points non conformes (lampadaires solaires)</h1>
-    <div style="font-size:12px;color:#555;">
-      Commune : <strong>${escapeHtml(state.chantier.commune)}</strong> |
-      Date : <strong>${escapeHtml(state.chantier.date)}</strong><br>
-      Projet : <strong>${escapeHtml(state.chantier.projet)}</strong><br>
-      Poseur : <strong>${escapeHtml(state.chantier.soustraitant)}</strong> |
-      Contrôleur : <strong>${escapeHtml(controleurNom)}</strong>
+  <div class="header">
+    <img src="${logoSrc}" alt="Logo">
+    <div>
+      <h1>PV – Points non conformes (lampadaires solaires)</h1>
+      <div class="meta">
+        Commune : <strong>${escapeHtml(state.chantier.commune)}</strong> |
+        Date : <strong>${escapeHtml(state.chantier.date)}</strong><br>
+        Projet : <strong>${escapeHtml(state.chantier.projet)}</strong><br>
+        Poseur : <strong>${escapeHtml(state.chantier.soustraitant)}</strong> |
+        Contrôleur : <strong>${escapeHtml(controleurNom)}</strong>
+      </div>
     </div>
   </div>
 
   <table>
     <thead>
       <tr>
-        <th style="width:6%;">#</th>
-        <th style="width:16%;">N° point</th>
-        <th style="width:58%;">Non-conformité / Observation</th>
-        <th style="width:20%;">Localisation</th>
+        <th style="width:4%;">#</th>
+        <th style="width:12%;">N° point</th>
+        <th style="width:36%;">Non-conformité / Observation</th>
+        <th style="width:18%;">Localisation</th>
+        <th style="width:12%;" class="nowrap">Date de reprise</th>
+        <th style="width:18%;">Statut</th>
       </tr>
     </thead>
     <tbody>
-      ${state.points.map((p,i)=>`
+      ${state.points.map((p,i)=>{
+        const statutTxt = (p.statut === "Autre") ? (p.statut_autre || "Autre") : (p.statut || "");
+        return `
         <tr>
           <td>${i+1}</td>
           <td><strong>${escapeHtml(p.numero)}</strong><br><span class="bad">NON CONFORME</span></td>
@@ -630,11 +686,13 @@
           <td>
             ${escapeHtml(p.repere || "")}<br>
             <span style="font-size:11px;color:#555;">
-              ${escapeHtml(p.lat || "")} ${p.lat && p.lon ? "•" : ""} ${escapeHtml(p.lon || "")}
+              ${escapeHtml(p.lat || "")} ${(p.lat && p.lon) ? "•" : ""} ${escapeHtml(p.lon || "")}
             </span>
           </td>
-        </tr>
-      `).join("")}
+          <td class="nowrap">${escapeHtml(p.date_reprise || "")}</td>
+          <td>${escapeHtml(statutTxt)}</td>
+        </tr>`;
+      }).join("")}
     </tbody>
   </table>
 
@@ -657,27 +715,54 @@
   </table>
 </body>
 </html>`;
+  };
+
+  const exportPDF = () => {
+    const missing = state.points
+      .map((p, i) => (!String(p.numero || "").trim() ? `Point ${i+1}` : null))
+      .filter(Boolean);
+
+    if (missing.length) {
+      alert("Numéro obligatoire manquant pour : " + missing.join(", "));
+      return;
+    }
+
+    const sigs = state.chantier.signatures || {};
+    if (!sigs.controleur || !sigs.entreprise || !sigs.client) {
+      alert("Il manque une ou plusieurs signatures (Contrôleur / Entreprise / Client).");
+      return;
+    }
 
     const overlay = byId("pdfLoading");
     overlay.style.display = "flex";
 
-    const original = document.body.innerHTML;
+    const html = buildPdfHtml();
 
+    // iframe cachée
+    let frame = document.getElementById("printFrame");
+    if (!frame) {
+      frame = document.createElement("iframe");
+      frame.id = "printFrame";
+      frame.style.position = "fixed";
+      frame.style.right = "0";
+      frame.style.bottom = "0";
+      frame.style.width = "0";
+      frame.style.height = "0";
+      frame.style.border = "0";
+      document.body.appendChild(frame);
+    }
+
+    const doc = frame.contentWindow.document;
+    doc.open();
+    doc.write(html);
+    doc.close();
+
+    // laisser le temps aux images (logo, signatures) de se charger
     setTimeout(() => {
-      document.body.innerHTML = html;
-      window.print();
-
-      setTimeout(() => {
-        document.body.innerHTML = original;
-        overlay.style.display = "none";
-
-        render();
-        bindChantier();
-        handlePointsEvents();
-        bindButtons();
-        initSignatures();
-      }, 700);
-    }, 250);
+      overlay.style.display = "none";
+      frame.contentWindow.focus();
+      frame.contentWindow.print();
+    }, 500);
   };
 
   // ===== Buttons =====
@@ -726,14 +811,5 @@
   initSignatures();
 </script>
 
-<!-- Overlay -->
-<div id="pdfLoading">
-  <div class="box">
-    <div class="spinner"></div>
-    <div>Génération du PDF…</div>
-  </div>
-</div>
-
 </body>
 </html>
-
