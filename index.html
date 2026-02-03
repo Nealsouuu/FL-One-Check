@@ -10,8 +10,9 @@
     body { margin: 0; background: #f6f7f9; }
     header { padding: 16px; background: #111827; color: white; }
     main { padding: 16px; max-width: 980px; margin: 0 auto; }
-    .card { background: white; border-radius: 12px; padding: 50px; margin-bottom: 12px; box-shadow: 0 2px 10px rgba(0,0,0,.06); }
-    .row { display: grid; grid-template-columns: 1fr 1fr; gap: 35px; }
+
+    .card { background: white; border-radius: 12px; padding: 24px; margin-bottom: 12px; box-shadow: 0 2px 10px rgba(0,0,0,.06); }
+    .row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
     @media (max-width: 720px){ .row { grid-template-columns: 1fr; } }
 
     label { display: block; font-size: 12px; color: #374151; margin-bottom: 4px; }
@@ -21,17 +22,15 @@
     }
     textarea { min-height: 70px; resize: vertical; }
 
-    .btnrow { display:flex; gap:10px; flex-wrap: wrap; }
+    .btnrow { display:flex; gap:10px; flex-wrap: wrap; align-items:center; }
     .btn { cursor:pointer; border: 0; background:#111827; color:white; padding:10px 12px; border-radius:10px; width:auto; }
     .btn.secondary { background:#374151; }
     .btn.danger { background:#b91c1c; }
 
     .pill { display:inline-block; padding:4px 10px; border-radius:999px; font-size:12px; }
-    .ok { background:#dcfce7; color:#166534; }
-    .warn { background:#ffedd5; color:#9a3412; }
     .bad { background:#fee2e2; color:#991b1b; }
 
-    .point-head { display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap: wrap; }
+    .point-head { display:flex; align-items:flex-start; justify-content:space-between; gap:10px; flex-wrap: wrap; }
     .small { font-size:12px; color:#6b7280; }
 
     .photos { display:flex; gap:10px; flex-wrap:wrap; margin-top:8px; }
@@ -220,15 +219,10 @@
     lon: "",
     reserves_txt: "",
     date_reprise: "",
-    statut: "A reprendre",
-    statut_autre: "",
-    date_reprise: "",
-    statut: "",
+    statut: "À reprendre",
     statut_autre: "",
     photos: []
   });
-
-  const statusClass = (s) => s === "Conforme" ? "ok" : (s === "Conforme avec réserves" ? "warn" : "bad");
 
   // ===== State =====
   let state = {
@@ -262,50 +256,24 @@
 
   // ===== Render =====
   const renderPoint = (p, idx) => {
-    const status = "Non conforme";
-    const pill = `<span class="pill ${statusClass(status)}">${status}</span>`;
     const showOther = (p.statut === "Autre");
-
-    const statutLabel = (p.statut === "Autre")
-      ? (p.statut_autre || "Autre")
-      : (p.statut || "");
+    const statutLabel = (p.statut === "Autre") ? (p.statut_autre || "Autre") : (p.statut || "");
 
     return `
       <section class="card" data-point-id="${p.id}">
         <div class="point-head">
           <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
-            <strong>Point ${idx+1}</strong> ${pill}
+            <strong>Point ${idx+1}</strong>
+            <span class="pill bad">Non conforme</span>
             <span class="small">ID: ${p.id.slice(0,8)}</span>
           </div>
-          <div class="row" style="margin-top:10px;">
-          <div>
-            <label>Date de reprise</label>
-            <input type="date" value="${escapeHtml(p.date_reprise || "")}" data-k="date_reprise" />
-          </div>
-
-          <div>
-            <label>Statut</label>
-            <select data-k="statut">
-              <option value="" ${!p.statut ? "selected" : ""}>—</option>
-              <option value="À reprendre" ${p.statut==="À reprendre"?"selected":""}>À reprendre</option>
-              <option value="En cours" ${p.statut==="En cours"?"selected":""}>En cours</option>
-              <option value="Repris" ${p.statut==="Repris"?"selected":""}>Repris</option>
-              <option value="Autre" ${p.statut==="Autre"?"selected":""}>Autre…</option>
-            </select>
-
-            <div style="margin-top:8px; ${p.statut==="Autre" ? "" : "display:none;"}" data-k-wrap="statut_autre">
-              <label>Statut (autre)</label>
-              <input value="${escapeHtml(p.statut_autre || "")}" data-k="statut_autre" placeholder="Saisir…" />
-            </div>
-          </div>
-        </div>
           <div class="btnrow">
             <button class="btn secondary" type="button" data-action="gps">📍 GPS</button>
             <button class="btn danger" type="button" data-action="remove">🗑️ Supprimer</button>
           </div>
         </div>
 
-        <div class="row" style="margin-top:10px;">
+        <div class="row" style="margin-top:12px;">
           <div>
             <label>N° point lumineux (obligatoire)</label>
             <input value="${escapeHtml(p.numero)}" data-k="numero" placeholder="Ex: PL-12 / A22" />
@@ -324,22 +292,24 @@
           </div>
         </div>
 
-        <div class="row" style="margin-top:10px;">
+        <div class="row" style="margin-top:12px;">
           <div>
             <label>Date de reprise</label>
-            <input type="date" value="${escapeHtml(p.date_reprise)}" data-k="date_reprise" />
+            <input type="date" value="${escapeHtml(p.date_reprise || "")}" data-k="date_reprise" />
           </div>
           <div>
             <label>Statut</label>
             <select data-k="statut">
-              <option value="A reprendre" ${p.statut==="A reprendre"?"selected":""}>À reprendre</option>
-              <option value="En attente" ${p.statut==="En attente"?"selected":""}>En attente</option>
+              <option value="À reprendre" ${p.statut==="À reprendre"?"selected":""}>À reprendre</option>
+              <option value="En cours" ${p.statut==="En cours"?"selected":""}>En cours</option>
               <option value="Repris" ${p.statut==="Repris"?"selected":""}>Repris</option>
               <option value="Autre" ${p.statut==="Autre"?"selected":""}>Autre…</option>
             </select>
-            <div style="margin-top:8px; display:${showOther ? "block" : "none"}">
-              <input value="${escapeHtml(p.statut_autre)}" data-k="statut_autre" placeholder="Saisir le statut" />
+
+            <div style="margin-top:8px; ${showOther ? "" : "display:none;"}">
+              <input value="${escapeHtml(p.statut_autre || "")}" data-k="statut_autre" placeholder="Saisir le statut…" />
             </div>
+
             <div class="small" style="margin-top:6px;">Actuel : <strong>${escapeHtml(statutLabel)}</strong></div>
           </div>
         </div>
@@ -387,13 +357,11 @@
     const totalProjet = Number(state.chantier.nbTotalPoints || 0);
     const nonConformes = state.points.length;
     const conformes = Math.max(totalProjet - nonConformes, 0);
-    const ecart = totalProjet > 0 ? Math.max(nonConformes - totalProjet, 0) : 0;
 
     byId("syntheseText").innerHTML = `
       <div>Total points projet : <strong>${totalProjet}</strong></div>
       <div>Points non conformes : <strong>${nonConformes}</strong></div>
       <div>Points conformes : <strong>${conformes}</strong></div>
-      ${ecart ? `<div class="bad" style="margin-top:6px;">⚠️ Plus de non-conformes que le total projet</div>` : ""}
     `;
   };
 
@@ -425,23 +393,21 @@
     const ctrlOtherWrap = byId("controleurAutreWrap");
     const ctrlOtherInput = byId("controleurAutre");
 
-    if (ctrlSelect && ctrlOtherWrap && ctrlOtherInput) {
-      ctrlSelect.addEventListener("change", () => {
-        const isOther = ctrlSelect.value === "__autre__";
-        ctrlOtherWrap.style.display = isOther ? "block" : "none";
-        if (!isOther) {
-          state.chantier.controleurAutre = "";
-          ctrlOtherInput.value = "";
-          save();
-          render();
-        }
-      });
-
-      ctrlOtherInput.addEventListener("input", () => {
-        state.chantier.controleurAutre = ctrlOtherInput.value;
+    ctrlSelect.addEventListener("change", () => {
+      const isOther = ctrlSelect.value === "__autre__";
+      ctrlOtherWrap.style.display = isOther ? "block" : "none";
+      if (!isOther) {
+        state.chantier.controleurAutre = "";
+        ctrlOtherInput.value = "";
         save();
-      });
-    }
+        render();
+      }
+    });
+
+    ctrlOtherInput.addEventListener("input", () => {
+      state.chantier.controleurAutre = ctrlOtherInput.value;
+      save();
+    });
   };
 
   // ===== Points events =====
@@ -478,7 +444,7 @@
       const p = state.points.find(x => x.id === pid);
       if (!p) return;
 
-      // fichiers photo
+      // Photos
       if (e.target.getAttribute("data-action") === "addPhotos") {
         const files = Array.from(e.target.files || []);
         for (const f of files) {
@@ -491,13 +457,13 @@
         return;
       }
 
-      // select statut: si on quitte "Autre", on vide statut_autre
+      // Statut (select)
       if (e.target.getAttribute("data-k") === "statut") {
-        if (p.statut !== "Autre") {
-          p.statut_autre = "";
-          save();
-        }
+        p.statut = e.target.value;
+        if (p.statut !== "Autre") p.statut_autre = "";
+        save();
         render();
+        return;
       }
     });
 
@@ -561,7 +527,6 @@
   const setupSignaturePad = (canvasId, clearBtnId, key) => {
     const canvas = byId(canvasId);
     const clearBtn = byId(clearBtnId);
-    if (!canvas || !clearBtn) return;
 
     const ctx = canvas.getContext("2d");
     ctx.lineWidth = 2;
@@ -645,8 +610,6 @@
         ? (state.chantier.controleurAutre || "")
         : (state.chantier.controleur || "");
 
-    // Logo: si tu mets un const LOGO_BASE64 = "data:image/png;base64,...";
-    // il sera utilisé. Sinon => logo.png
     const logoSrc = (typeof LOGO_BASE64 !== "undefined" && String(LOGO_BASE64).startsWith("data:"))
       ? LOGO_BASE64
       : "logo.png";
@@ -743,82 +706,69 @@
 </html>`;
   };
 
-const exportPDF = () => {
-  // 1) Vérif numéros obligatoires
-  const missing = state.points
-    .map((p, i) => (!String(p.numero || "").trim() ? `Point ${i+1}` : null))
-    .filter(Boolean);
+  const exportPDF = () => {
+    const missing = state.points
+      .map((p, i) => (!String(p.numero || "").trim() ? `Point ${i+1}` : null))
+      .filter(Boolean);
 
-  if (missing.length) {
-    alert("Numéro obligatoire manquant pour : " + missing.join(", "));
-    return;
-  }
-
-  // 2) Vérif signatures
-  const sigs = state.chantier.signatures || {};
-  if (!sigs.controleur || !sigs.entreprise || !sigs.client) {
-    alert("Il manque une ou plusieurs signatures (Contrôleur / Entreprise / Client).");
-    return;
-  }
-
-  // 3) Affiche overlay
-  const overlay = byId("pdfLoading");
-  if (overlay) overlay.style.display = "flex";
-
-  // 4) Fonction cleanup (retour app normal)
-  let cleaned = false;
-  const cleanup = () => {
-    if (cleaned) return;
-    cleaned = true;
-    if (overlay) overlay.style.display = "none";
-    window.removeEventListener("focus", cleanup);
-  };
-
-  // 5) Sur iPad: quand tu fermes l’aperçu -> focus revient -> on enlève l’overlay
-  window.addEventListener("focus", cleanup, { once: true });
-
-  // 6) Filet de sécurité si Safari ne déclenche pas focus
-  setTimeout(cleanup, 6000);
-
-  // 7) HTML PDF
-  const html = buildPdfHtml();
-
-  // 8) Création / récupération d’une iframe cachée
-  let frame = document.getElementById("printFrame");
-  if (!frame) {
-    frame = document.createElement("iframe");
-    frame.id = "printFrame";
-    frame.style.position = "fixed";
-    frame.style.right = "0";
-    frame.style.bottom = "0";
-    frame.style.width = "0";
-    frame.style.height = "0";
-    frame.style.border = "0";
-    document.body.appendChild(frame);
-  }
-
-  // 9) Injecter le HTML dans l’iframe
-  const doc = frame.contentWindow.document;
-  doc.open();
-  doc.write(html);
-  doc.close();
-
-  // 10) Lancer l’impression
-  const doPrint = () => {
-    try {
-      cleanup(); // très important: enlève l’overlay AVANT print
-      frame.contentWindow.focus();
-      frame.contentWindow.print();
-    } catch (e) {
-      cleanup();
-      alert("Impression impossible : " + e.message);
+    if (missing.length) {
+      alert("Numéro obligatoire manquant pour : " + missing.join(", "));
+      return;
     }
-  };
 
-  // 11) Certains iPad ne déclenchent pas toujours onload => fallback
-  frame.onload = doPrint;
-  setTimeout(doPrint, 500);
-};
+    const sigs = state.chantier.signatures || {};
+    if (!sigs.controleur || !sigs.entreprise || !sigs.client) {
+      alert("Il manque une ou plusieurs signatures (Contrôleur / Entreprise / Client).");
+      return;
+    }
+
+    const overlay = byId("pdfLoading");
+    overlay.style.display = "flex";
+
+    let cleaned = false;
+    const cleanup = () => {
+      if (cleaned) return;
+      cleaned = true;
+      overlay.style.display = "none";
+      window.removeEventListener("focus", cleanup);
+    };
+
+    window.addEventListener("focus", cleanup, { once: true });
+    setTimeout(cleanup, 6000);
+
+    const html = buildPdfHtml();
+
+    let frame = document.getElementById("printFrame");
+    if (!frame) {
+      frame = document.createElement("iframe");
+      frame.id = "printFrame";
+      frame.style.position = "fixed";
+      frame.style.right = "0";
+      frame.style.bottom = "0";
+      frame.style.width = "0";
+      frame.style.height = "0";
+      frame.style.border = "0";
+      document.body.appendChild(frame);
+    }
+
+    const doc = frame.contentWindow.document;
+    doc.open();
+    doc.write(html);
+    doc.close();
+
+    const doPrint = () => {
+      try {
+        cleanup();
+        frame.contentWindow.focus();
+        frame.contentWindow.print();
+      } catch (e) {
+        cleanup();
+        alert("Impression impossible : " + e.message);
+      }
+    };
+
+    setTimeout(doPrint, 500);
+  };
 
   // ===== Buttons =====
   const bindButtons = () => {
@@ -868,4 +818,3 @@ const exportPDF = () => {
 
 </body>
 </html>
-
