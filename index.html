@@ -191,8 +191,14 @@
   </div>
 </div>
 
-<!-- html2pdf -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+<!-- html2canvas standalone (expose le global html2canvas) -->
+<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+
+<!-- html2pdf bundle -->
+<script src="https://cdn.jsdelivr.net/npm/html2pdf.js@0.10.1/dist/html2pdf.bundle.min.js"></script>
+
+<!-- jsPDF UMD (expose window.jspdf.jsPDF) -->
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
 
 <script>
 /* =========================
@@ -736,9 +742,10 @@ const buildPdfBody = async () => {
       ? (state.chantier.controleurAutre || "")
       : (state.chantier.controleur || "");
 
-  const logoSrc = (typeof LOGO_BASE64 !== "undefined" && String(LOGO_BASE64).startsWith("data:"))
-  ? LOGO_BASE64
-  : ("logo.png?v=" + Date.now());
+    // Privilégie un dataURL si dispo ; sinon même origine SANS cache-buster
+    const logoSrc = (typeof LOGO_BASE64 !== "undefined" && String(LOGO_BASE64).startsWith("data:"))
+      ? LOGO_BASE64
+      : "logo.png";
 
   // prépare lignes avec photos (IDB)
   const rows = [];
@@ -756,9 +763,10 @@ const buildPdfBody = async () => {
         </td>
         <td style="border:1px solid #ddd;padding:8px;vertical-align:top;">
           <div style="display:flex;gap:6px;flex-wrap:wrap;">
-            ${first3.map(ph => `
-              <img src="${logoSrc}" crossorigin="anonymous" alt="Logo" style="height:46px;object-fit:contain;">
-            `).join("")}
+          ${first3.map(ph => `
+            <img src="${ph.dataUrl}" alt="Photo"
+                style="height:46px;object-fit:cover;border:1px solid #ddd;border-radius:6px;">
+          `).join("")}
             ${(photos.length > 3) ? `<div style="font-size:11px;color:#555;align-self:center;">+${photos.length - 3}</div>` : ""}
           </div>
         </td>
@@ -776,7 +784,7 @@ const buildPdfBody = async () => {
   return `
     <div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;line-height:1.35;">
       <div style="display:flex;gap:14px;align-items:center;border-bottom:2px solid #111827;padding-bottom:10px;margin-bottom:16px;">
-        <img src="${logoSrc}" alt="Logo" style="height:46px;object-fit:contain;">
+        <img src="${logoSrc}" alt="Logo" crossorigin="anonymous" style="height:46px;object-fit:contain;">
         <div>
           <div style="font-size:18px;font-weight:700;margin:0;">PV – Points non conformes (lampadaires solaires)</div>
           <div style="font-size:12px;color:#555;margin-top:4px;">
@@ -826,25 +834,25 @@ const buildPdfBody = async () => {
   `;
 };
 
+
 const exportPDF = async () => {
-  let previewWin = null;
   let container = null;
 
   try {
-    if (typeof html2pdf === "undefined") {
-      alert("Lib PDF non chargée (html2pdf). Vérifie la connexion / CDN.");
+    // Garde de sécurité (libs chargées ?)
+    if (!window.html2canvas || !window.jspdf?.jsPDF) {
+      alert("Librairies manquantes (html2canvas/jsPDF). Recharge la page.");
       return;
     }
 
+    // -- Vérifs métier (inchangées)
     const missing = state.points
       .map((p, i) => (!String(p.numero || "").trim() ? `Point ${i + 1}` : null))
       .filter(Boolean);
-
     if (missing.length) {
       alert("Numéro obligatoire manquant pour : " + missing.join(", "));
       return;
     }
-
     const sigs = state.chantier.signatures || {};
     if (!sigs.controleur || !sigs.entreprise || !sigs.client) {
       alert("Il manque une ou plusieurs signatures (Contrôleur / Entreprise / Client).");
@@ -853,76 +861,100 @@ const exportPDF = async () => {
 
     byId("pdfLoading").style.display = "flex";
 
-    // iOS: ouvrir l’onglet tout de suite
-    previewWin = window.open("", "_blank");
-    if (!previewWin) {
-      byId("pdfLoading").style.display = "none";
-      alert("Pop-up bloquée. Autorise les pop-ups pour ouvrir l’aperçu PDF.");
-      return;
-    }
-    previewWin.document.body.innerHTML =
-      "<p style='font-family:system-ui;padding:16px'>Génération du PDF…</p>";
-
-    // Container rendu mais invisible
+    // -- 1) Conteneur CAPTURABLE (dans le viewport, derrière l’UI)
     container = document.createElement("div");
-    container.style.position = "absolute";
-    ccontainer.style.left = "-10000px";   // hors écran
+    container.style.position = "fixed";
+    container.style.left = "0";
     container.style.top = "0";
-    container.style.width = "794px";
+    container.style.width = "794px";          // ~ A4 @96dpi
     container.style.background = "#fff";
-    container.style.visibility = "visible";
-    container.style.opacity = "0.01";    // ⚠️ pas 0
+    container.style.opacity = "1";
     container.style.pointerEvents = "none";
-    container.style.zIndex = "9999";
-
+    container.style.visibility = "visible";
+    container.style.zIndex = "-1";
     container.innerHTML = await buildPdfBody();
     document.body.appendChild(container);
 
-    // iPad: attendre paint + polices + images
+    // -- 2) Attendre paint + polices + images
     await new Promise(r => requestAnimationFrame(r));
     await new Promise(r => requestAnimationFrame(r));
-
     if (document.fonts && document.fonts.ready) {
-      try { await document.fonts.ready; } catch(e) {}
+      try { await document.fonts.ready; } catch {}
+    }
+    await waitForImages(container);
+    await new Promise(r => setTimeout(r, 120));
+
+    // -- 3) Capture directe avec html2canvas
+    const canvas = await html2canvas(container, {
+      scale: 1.35,                 // plus net
+      useCORS: true,
+      allowTaint: false,
+      backgroundColor: "#ffffff",
+      logging: false,
+      imageTimeout: 15000
+    });
+
+    // (Debug optionnel)
+    // console.log('canvas px:', canvas.width, canvas.height);
+
+    // -- 4) Création du PDF (multi-pages si nécessaire)
+    const { jsPDF } = window.jspdf;
+    const pdf = new jsPDF({ unit: "mm", format: "a4", orientation: "portrait" });
+
+    const pdfW = pdf.internal.pageSize.getWidth();   // largeur mm
+    const pdfH = pdf.internal.pageSize.getHeight();  // hauteur mm
+
+    // On remplit la largeur du PDF (conversion via ratios, pas besoin de dpi)
+    const imgW = pdfW;
+    const imgH = canvas.height * (imgW / canvas.width); // mm (proportionnel)
+
+    if (imgH <= pdfH) {
+      // Une seule page suffit
+      const imgData = canvas.toDataURL("image/jpeg", 0.95);
+      pdf.addImage(imgData, "JPEG", 0, 0, imgW, imgH);
+    } else {
+      // Découpage vertical : on “slice” le canvas en bandes qui rentrent en hauteur
+      const pageCanvas = document.createElement("canvas");
+      const pageCtx = pageCanvas.getContext("2d");
+
+      // hauteur en pixels correspondant à une page A4 (à l’échelle)
+      const pageHpx = Math.floor(canvas.width * (pdfH / pdfW));
+      let y = 0;
+
+      while (y < canvas.height) {
+        const sliceH = Math.min(pageHpx, canvas.height - y);
+        pageCanvas.width = canvas.width;
+        pageCanvas.height = sliceH;
+
+        pageCtx.clearRect(0, 0, pageCanvas.width, pageCanvas.height);
+        pageCtx.drawImage(
+          canvas,
+          0, y,                           // source y
+          canvas.width, sliceH,           // source taille
+          0, 0,                           // dest x,y
+          pageCanvas.width, sliceH        // dest taille
+        );
+
+        const pageImg = pageCanvas.toDataURL("image/jpeg", 0.95);
+        const pageImgH_mm = (sliceH * imgW) / canvas.width; // hauteur mm
+        pdf.addImage(pageImg, "JPEG", 0, 0, imgW, pageImgH_mm);
+
+        y += sliceH;
+        if (y < canvas.height) pdf.addPage();
+      }
     }
 
-    await waitForImages(container);
-    await new Promise(r => setTimeout(r, 250));
-
-    // ✅ IMPORTANT : génération DIRECTE du blob (évite le freeze iPad)
-    const blob = await html2pdf()
-      .set({
-        margin: [12, 10, 12, 10],
-        image: { type: "jpeg", quality: 0.92 },
-        html2canvas: {
-          scale: 1.25,
-          useCORS: true,
-          allowTaint: false,
-          backgroundColor: "#ffffff",
-          logging: false,
-          imageTimeout: 15000,
-          windowWidth: 794,
-          windowHeight: 1123
-        },
-        jsPDF: { unit: "mm", format: "a4", orientation: "portrait" }
-      })
-      .from(container)
-      .outputPdf("blob"); // ✅
-
-    const blobUrl = URL.createObjectURL(blob);
-
     byId("pdfLoading").style.display = "none";
-    previewWin.location.href = blobUrl;
 
-    setTimeout(() => URL.revokeObjectURL(blobUrl), 60000);
+   
+const blob = pdf.output('blob');
+const url = URL.createObjectURL(blob);
+window.open(url, '_blank');
+setTimeout(() => URL.revokeObjectURL(url), 60000);
+
+
   } catch (e) {
     byId("pdfLoading").style.display = "none";
-    if (previewWin) {
-      previewWin.document.body.innerHTML =
-        "<p style='font-family:system-ui;padding:16px;color:#b91c1c'>Erreur PDF : " +
-        String(e?.message || e) +
-        "</p>";
-    }
     alert("Erreur PDF : " + (e?.message || e));
   } finally {
     if (container) container.remove();
@@ -993,7 +1025,3 @@ const bindButtons = () => {
 
 </body>
 </html>
-
-
-
-
