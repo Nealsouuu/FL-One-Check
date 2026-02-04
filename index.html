@@ -897,43 +897,65 @@ const exportPDF = async () => {
     // (Debug optionnel)
     // console.log('canvas px:', canvas.width, canvas.height);
 
-    // -- 4) Création du PDF (multi-pages si nécessaire)
-    const { jsPDF } = window.jspdf;
-    const pdf = new jsPDF({ unit: "mm", format: "a4", orientation: "portrait" });
+// -- 4) Création du PDF (multi-pages si nécessaire)
+const { jsPDF } = window.jspdf;
+const pdf = new jsPDF({ unit: "mm", format: "a4", orientation: "portrait" });
 
-    const pdfW = pdf.internal.pageSize.getWidth();   // largeur mm
-    const pdfH = pdf.internal.pageSize.getHeight();  // hauteur mm
+const pdfW = pdf.internal.pageSize.getWidth();
+const pdfH = pdf.internal.pageSize.getHeight();
 
-    // On remplit la largeur du PDF (conversion via ratios, pas besoin de dpi)
-    const imgW = pdfW;
-    const imgH = canvas.height * (imgW / canvas.width); // mm (proportionnel)
+// ✅ Marges PDF (bordure visible à l’impression)
+const M = 8;                 // marge en mm (tu peux mettre 10 si tu veux plus d’air)
+const usableW = pdfW - 2*M;  // largeur utile
+const usableH = pdfH - 2*M;  // hauteur utile
 
-    if (imgH <= pdfH) {
-      // Une seule page suffit
-      const imgData = canvas.toDataURL("image/jpeg", 0.95);
-      pdf.addImage(imgData, "JPEG", 0, 0, imgW, imgH);
-    } else {
-      // Découpage vertical : on “slice” le canvas en bandes qui rentrent en hauteur
-      const pageCanvas = document.createElement("canvas");
-      const pageCtx = pageCanvas.getContext("2d");
+// On remplit la largeur utile (et pas tout le PDF)
+const imgW = usableW;
+const imgH = canvas.height * (imgW / canvas.width); // mm (proportionnel)
 
-      // hauteur en pixels correspondant à une page A4 (à l’échelle)
-      const pageHpx = Math.floor(canvas.width * (pdfH / pdfW));
-      let y = 0;
+if (imgH <= usableH) {
+  // Une seule page
+  const imgData = canvas.toDataURL("image/jpeg", 0.95);
+  pdf.addImage(imgData, "JPEG", M, M, imgW, imgH);
+} else {
+  // Multi-pages : slice du canvas
+  const pageCanvas = document.createElement("canvas");
+  const pageCtx = pageCanvas.getContext("2d");
 
-      while (y < canvas.height) {
-        const sliceH = Math.min(pageHpx, canvas.height - y);
-        pageCanvas.width = canvas.width;
-        pageCanvas.height = sliceH;
+  // hauteur en pixels correspondant à la hauteur utile d'une page
+  const pageHpx = Math.floor(canvas.width * (usableH / usableW));
+  let y = 0;
+  let first = true;
 
-        pageCtx.clearRect(0, 0, pageCanvas.width, pageCanvas.height);
-        pageCtx.drawImage(
-          canvas,
-          0, y,                           // source y
-          canvas.width, sliceH,           // source taille
-          0, 0,                           // dest x,y
-          pageCanvas.width, sliceH        // dest taille
-        );
+  while (y < canvas.height) {
+    const sliceH = Math.min(pageHpx, canvas.height - y);
+
+    pageCanvas.width = canvas.width;
+    pageCanvas.height = sliceH;
+
+    pageCtx.clearRect(0, 0, pageCanvas.width, pageCanvas.height);
+    pageCtx.drawImage(
+      canvas,
+      0, y,
+      canvas.width, sliceH,
+      0, 0,
+      pageCanvas.width, sliceH
+    );
+
+    const pageImg = pageCanvas.toDataURL("image/jpeg", 0.95);
+
+    // hauteur en mm pour cette tranche
+    const pageImgH_mm = (sliceH * imgW) / canvas.width;
+
+    if (!first) pdf.addPage();
+    first = false;
+
+    // ✅ On place dans la zone utile (marges)
+    pdf.addImage(pageImg, "JPEG", M, M, imgW, pageImgH_mm);
+
+    y += sliceH;
+  }
+}
 
         const pageImg = pageCanvas.toDataURL("image/jpeg", 0.95);
         const pageImgH_mm = (sliceH * imgW) / canvas.width; // hauteur mm
@@ -1025,3 +1047,4 @@ const bindButtons = () => {
 
 </body>
 </html>
+
