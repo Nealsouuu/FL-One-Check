@@ -834,18 +834,15 @@ const buildPdfBody = async () => {
   `;
 };
 
-
 const exportPDF = async () => {
   let container = null;
 
   try {
-    // Garde de sécurité (libs chargées ?)
     if (!window.html2canvas || !window.jspdf?.jsPDF) {
       alert("Librairies manquantes (html2canvas/jsPDF). Recharge la page.");
       return;
     }
 
-    // -- Vérifs métier (inchangées)
     const missing = state.points
       .map((p, i) => (!String(p.numero || "").trim() ? `Point ${i + 1}` : null))
       .filter(Boolean);
@@ -853,6 +850,7 @@ const exportPDF = async () => {
       alert("Numéro obligatoire manquant pour : " + missing.join(", "));
       return;
     }
+
     const sigs = state.chantier.signatures || {};
     if (!sigs.controleur || !sigs.entreprise || !sigs.client) {
       alert("Il manque une ou plusieurs signatures (Contrôleur / Entreprise / Client).");
@@ -861,21 +859,24 @@ const exportPDF = async () => {
 
     byId("pdfLoading").style.display = "flex";
 
-    // -- 1) Conteneur CAPTURABLE (dans le viewport, derrière l’UI)
     container = document.createElement("div");
     container.style.position = "fixed";
     container.style.left = "0";
     container.style.top = "0";
-    container.style.width = "794px";          // ~ A4 @96dpi
+    container.style.width = "794px"; // ~ A4 @96dpi
     container.style.background = "#fff";
     container.style.opacity = "1";
     container.style.pointerEvents = "none";
     container.style.visibility = "visible";
     container.style.zIndex = "-1";
+
+    // (optionnel mais conseillé)
+    // container.style.padding = "10px";
+    // container.style.boxSizing = "border-box";
+
     container.innerHTML = await buildPdfBody();
     document.body.appendChild(container);
 
-    // -- 2) Attendre paint + polices + images
     await new Promise(r => requestAnimationFrame(r));
     await new Promise(r => requestAnimationFrame(r));
     if (document.fonts && document.fonts.ready) {
@@ -884,9 +885,8 @@ const exportPDF = async () => {
     await waitForImages(container);
     await new Promise(r => setTimeout(r, 120));
 
-    // -- 3) Capture directe avec html2canvas
     const canvas = await html2canvas(container, {
-      scale: 1.35,                 // plus net
+      scale: 1.35,
       useCORS: true,
       allowTaint: false,
       backgroundColor: "#ffffff",
@@ -894,79 +894,64 @@ const exportPDF = async () => {
       imageTimeout: 15000
     });
 
-    // (Debug optionnel)
-    // console.log('canvas px:', canvas.width, canvas.height);
+    // --- PDF
+    const { jsPDF } = window.jspdf;
+    const pdf = new jsPDF({ unit: "mm", format: "a4", orientation: "portrait" });
 
-// -- 4) Création du PDF (multi-pages si nécessaire)
-const { jsPDF } = window.jspdf;
-const pdf = new jsPDF({ unit: "mm", format: "a4", orientation: "portrait" });
+    const pdfW = pdf.internal.pageSize.getWidth();
+    const pdfH = pdf.internal.pageSize.getHeight();
 
-const pdfW = pdf.internal.pageSize.getWidth();
-const pdfH = pdf.internal.pageSize.getHeight();
+    const M = 8;                 // marge en mm
+    const usableW = pdfW - 2 * M;
+    const usableH = pdfH - 2 * M;
 
-// ✅ Marges PDF (bordure visible à l’impression)
-const M = 8;                 // marge en mm (tu peux mettre 10 si tu veux plus d’air)
-const usableW = pdfW - 2*M;  // largeur utile
-const usableH = pdfH - 2*M;  // hauteur utile
+    const imgW = usableW;
+    const imgH = canvas.height * (imgW / canvas.width);
 
-// On remplit la largeur utile (et pas tout le PDF)
-const imgW = usableW;
-const imgH = canvas.height * (imgW / canvas.width); // mm (proportionnel)
+    if (imgH <= usableH) {
+      const imgData = canvas.toDataURL("image/jpeg", 0.95);
+      pdf.addImage(imgData, "JPEG", M, M, imgW, imgH);
+    } else {
+      const pageCanvas = document.createElement("canvas");
+      const pageCtx = pageCanvas.getContext("2d");
 
-if (imgH <= usableH) {
-  // Une seule page
-  const imgData = canvas.toDataURL("image/jpeg", 0.95);
-  pdf.addImage(imgData, "JPEG", M, M, imgW, imgH);
-} else {
-  // Multi-pages : slice du canvas
-  const pageCanvas = document.createElement("canvas");
-  const pageCtx = pageCanvas.getContext("2d");
+      const pageHpx = Math.floor(canvas.width * (usableH / usableW));
+      let y = 0;
+      let first = true;
 
-  // hauteur en pixels correspondant à la hauteur utile d'une page
-  const pageHpx = Math.floor(canvas.width * (usableH / usableW));
-  let y = 0;
-  let first = true;
+      while (y < canvas.height) {
+        const sliceH = Math.min(pageHpx, canvas.height - y);
 
-  while (y < canvas.height) {
-    const sliceH = Math.min(pageHpx, canvas.height - y);
+        pageCanvas.width = canvas.width;
+        pageCanvas.height = sliceH;
 
-    pageCanvas.width = canvas.width;
-    pageCanvas.height = sliceH;
+        pageCtx.clearRect(0, 0, pageCanvas.width, pageCanvas.height);
+        pageCtx.drawImage(
+          canvas,
+          0, y,
+          canvas.width, sliceH,
+          0, 0,
+          pageCanvas.width, sliceH
+        );
 
-    pageCtx.clearRect(0, 0, pageCanvas.width, pageCanvas.height);
-    pageCtx.drawImage(
-      canvas,
-      0, y,
-      canvas.width, sliceH,
-      0, 0,
-      pageCanvas.width, sliceH
-    );
+        const pageImg = pageCanvas.toDataURL("image/jpeg", 0.95);
+        const pageImgH_mm = (sliceH * imgW) / canvas.width;
 
-    const pageImg = pageCanvas.toDataURL("image/jpeg", 0.95);
+        if (!first) pdf.addPage();
+        first = false;
 
-    // hauteur en mm pour cette tranche
-    const pageImgH_mm = (sliceH * imgW) / canvas.width;
+        pdf.addImage(pageImg, "JPEG", M, M, imgW, pageImgH_mm);
 
-    if (!first) pdf.addPage();
-    first = false;
-
-    // ✅ On place dans la zone utile (marges)
-    pdf.addImage(pageImg, "JPEG", M, M, imgW, pageImgH_mm);
-
-    y += sliceH;
-  }
-}
+        y += sliceH;
       }
     }
 
     byId("pdfLoading").style.display = "none";
 
-   
-const blob = pdf.output('blob');
-const url = URL.createObjectURL(blob);
-window.open(url, '_blank');
-setTimeout(() => URL.revokeObjectURL(url), 60000);
-
+    const blob = pdf.output("blob");
+    const url = URL.createObjectURL(blob);
+    window.open(url, "_blank");
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
 
   } catch (e) {
     byId("pdfLoading").style.display = "none";
@@ -1040,5 +1025,6 @@ const bindButtons = () => {
 
 </body>
 </html>
+
 
 
