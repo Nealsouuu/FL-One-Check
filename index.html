@@ -866,11 +866,12 @@ const exportPDF = async () => {
     // Container rendu mais invisible
     container = document.createElement("div");
     container.style.position = "absolute";
-    container.style.left = "0";
+    ccontainer.style.left = "-10000px";   // hors écran
     container.style.top = "0";
     container.style.width = "794px";
     container.style.background = "#fff";
-    container.style.visibility = "hidden";
+    container.style.visibility = "visible";
+    container.style.opacity = "0.01";    // ⚠️ pas 0
     container.style.pointerEvents = "none";
     container.style.zIndex = "9999";
 
@@ -992,6 +993,7 @@ const bindButtons = () => {
 
 </body>
 </html>
+
 
 
 
