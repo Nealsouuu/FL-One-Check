@@ -956,13 +956,6 @@ if (imgH <= usableH) {
     y += sliceH;
   }
 }
-
-        const pageImg = pageCanvas.toDataURL("image/jpeg", 0.95);
-        const pageImgH_mm = (sliceH * imgW) / canvas.width; // hauteur mm
-        pdf.addImage(pageImg, "JPEG", 0, 0, imgW, pageImgH_mm);
-
-        y += sliceH;
-        if (y < canvas.height) pdf.addPage();
       }
     }
 
@@ -1047,4 +1040,5 @@ const bindButtons = () => {
 
 </body>
 </html>
+
 
