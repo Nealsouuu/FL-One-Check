@@ -737,8 +737,8 @@ const buildPdfBody = async () => {
       : (state.chantier.controleur || "");
 
   const logoSrc = (typeof LOGO_BASE64 !== "undefined" && String(LOGO_BASE64).startsWith("data:"))
-    ? LOGO_BASE64
-    : "logo.png";
+  ? LOGO_BASE64
+  : ("logo.png?v=" + Date.now());
 
   // prépare lignes avec photos (IDB)
   const rows = [];
@@ -757,7 +757,7 @@ const buildPdfBody = async () => {
         <td style="border:1px solid #ddd;padding:8px;vertical-align:top;">
           <div style="display:flex;gap:6px;flex-wrap:wrap;">
             ${first3.map(ph => `
-              <img src="${ph.dataUrl}" alt="photo" style="width:48px;height:48px;object-fit:cover;border:1px solid #ddd;border-radius:6px;">
+              <img src="${logoSrc}" crossorigin="anonymous" alt="Logo" style="height:46px;object-fit:contain;">
             `).join("")}
             ${(photos.length > 3) ? `<div style="font-size:11px;color:#555;align-self:center;">+${photos.length - 3}</div>` : ""}
           </div>
@@ -827,6 +827,9 @@ const buildPdfBody = async () => {
 };
 
 const exportPDF = async () => {
+  let previewWin = null;
+  let container = null;
+
   try {
     if (typeof html2pdf === "undefined") {
       alert("Lib PDF non chargée (html2pdf). Vérifie la connexion / CDN.");
@@ -834,8 +837,9 @@ const exportPDF = async () => {
     }
 
     const missing = state.points
-      .map((p, i) => (!String(p.numero || "").trim() ? `Point ${i+1}` : null))
+      .map((p, i) => (!String(p.numero || "").trim() ? `Point ${i + 1}` : null))
       .filter(Boolean);
+
     if (missing.length) {
       alert("Numéro obligatoire manquant pour : " + missing.join(", "));
       return;
@@ -849,23 +853,23 @@ const exportPDF = async () => {
 
     byId("pdfLoading").style.display = "flex";
 
-    // IMPORTANT iOS: ouvrir un onglet tout de suite
-    const previewWin = window.open("", "_blank");
+    // iOS: ouvrir l’onglet tout de suite
+    previewWin = window.open("", "_blank");
     if (!previewWin) {
       byId("pdfLoading").style.display = "none";
       alert("Pop-up bloquée. Autorise les pop-ups pour ouvrir l’aperçu PDF.");
       return;
     }
-    previewWin.document.write("<p style='font-family:system-ui'>Génération du PDF…</p>");
+    previewWin.document.body.innerHTML =
+      "<p style='font-family:system-ui;padding:16px'>Génération du PDF…</p>";
 
-    const container = document.createElement("div");
+    // Container rendu mais invisible
+    container = document.createElement("div");
     container.style.position = "absolute";
     container.style.left = "0";
     container.style.top = "0";
     container.style.width = "794px";
     container.style.background = "#fff";
-
-// ✅ iPad: "visibility:hidden" garde le rendu (contrairement à z-index -1 / opacity 0)
     container.style.visibility = "hidden";
     container.style.pointerEvents = "none";
     container.style.zIndex = "9999";
@@ -873,54 +877,54 @@ const exportPDF = async () => {
     container.innerHTML = await buildPdfBody();
     document.body.appendChild(container);
 
-// ✅ attendre layout + paint (iPad en a besoin)
-await new Promise(r => requestAnimationFrame(r));
-await new Promise(r => requestAnimationFrame(r));
+    // iPad: attendre paint + polices + images
+    await new Promise(r => requestAnimationFrame(r));
+    await new Promise(r => requestAnimationFrame(r));
 
-// ✅ attendre les polices (sinon rendu parfois vide)
-if (document.fonts && document.fonts.ready) {
-  try { await document.fonts.ready; } catch(e) {}
-}
+    if (document.fonts && document.fonts.ready) {
+      try { await document.fonts.ready; } catch(e) {}
+    }
 
-// ✅ attendre images
-await waitForImages(container);
+    await waitForImages(container);
+    await new Promise(r => setTimeout(r, 250));
 
-// ✅ petit délai sécurité
-await new Promise(r => setTimeout(r, 250));
-
-
-    const worker = html2pdf()
+    // ✅ IMPORTANT : génération DIRECTE du blob (évite le freeze iPad)
+    const blob = await html2pdf()
       .set({
         margin: [12, 10, 12, 10],
-        image: { type: "jpeg", quality: 0.95 },
+        image: { type: "jpeg", quality: 0.92 },
         html2canvas: {
-          scale: 2,
+          scale: 1.25,
           useCORS: true,
-          allowTaint: true,
+          allowTaint: false,
           backgroundColor: "#ffffff",
           logging: false,
-          imagetimeout: 15000,
+          imageTimeout: 15000,
           windowWidth: 794,
-          windowHeight: 1123,
+          windowHeight: 1123
         },
         jsPDF: { unit: "mm", format: "a4", orientation: "portrait" }
       })
       .from(container)
-      .toPdf();
+      .outputPdf("blob"); // ✅
 
-    const pdf = await worker.get("pdf");
-    const blob = pdf.output("blob");
     const blobUrl = URL.createObjectURL(blob);
 
-    container.remove();
     byId("pdfLoading").style.display = "none";
-
     previewWin.location.href = blobUrl;
-    setTimeout(() => URL.revokeObjectURL(blobUrl), 60000);
 
+    setTimeout(() => URL.revokeObjectURL(blobUrl), 60000);
   } catch (e) {
     byId("pdfLoading").style.display = "none";
-    alert("Erreur PDF : " + (e && e.message ? e.message : e));
+    if (previewWin) {
+      previewWin.document.body.innerHTML =
+        "<p style='font-family:system-ui;padding:16px;color:#b91c1c'>Erreur PDF : " +
+        String(e?.message || e) +
+        "</p>";
+    }
+    alert("Erreur PDF : " + (e?.message || e));
+  } finally {
+    if (container) container.remove();
   }
 };
 
@@ -988,5 +992,6 @@ const bindButtons = () => {
 
 </body>
 </html>
+
 
 
