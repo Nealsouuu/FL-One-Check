@@ -191,676 +191,782 @@
   </div>
 </div>
 
+<!-- html2pdf -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+
 <script>
-  // ===== Helpers =====
-  const LS_KEY = "reception_lampadaire_v1";
-  const byId = (id) => document.getElementById(id);
+/* =========================
+   Stockage
+   - State (sans images) : localStorage
+   - Photos : IndexedDB (stable)
+========================= */
 
-  const todayISO = () => {
-    const d = new Date();
-    const pad = (n) => String(n).padStart(2, "0");
-    return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+const LS_KEY = "reception_lampadaire_state_v3"; // nouvelle clé (évite l’ancien stockage plein)
+const DB_NAME = "reception_lampadaire_photos_v1";
+const DB_STORE = "photos";
+
+const byId = (id) => document.getElementById(id);
+
+const todayISO = () => {
+  const d = new Date();
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+};
+
+function escapeHtml(str){
+  return String(str ?? "")
+    .replaceAll("&","&amp;")
+    .replaceAll("<","&lt;")
+    .replaceAll(">","&gt;")
+    .replaceAll('"',"&quot;")
+    .replaceAll("'","&#039;");
+}
+
+/* ===== IndexedDB helpers ===== */
+const openDB = () => new Promise((resolve, reject) => {
+  const req = indexedDB.open(DB_NAME, 1);
+  req.onupgradeneeded = () => {
+    const db = req.result;
+    if (!db.objectStoreNames.contains(DB_STORE)) {
+      const store = db.createObjectStore(DB_STORE, { keyPath: "id" });
+      store.createIndex("pointId", "pointId", { unique:false });
+    }
   };
+  req.onsuccess = () => resolve(req.result);
+  req.onerror = () => reject(req.error);
+});
 
-  function escapeHtml(str){
-    return String(str ?? "")
-      .replaceAll("&","&amp;")
-      .replaceAll("<","&lt;")
-      .replaceAll(">","&gt;")
-      .replaceAll('"',"&quot;")
-      .replaceAll("'","&#039;");
-  }
-
-  const defaultPoint = () => ({
-    id: "id-" + Date.now().toString(36) + "-" + Math.random().toString(36).substring(2, 8),
-    numero: "",
-    repere: "",
-    lat: "",
-    lon: "",
-    reserves_txt: "",
-    date_reprise: "",
-    statut: "À reprendre",
-    statut_autre: "",
-    photos: []
+const idbPut = async (obj) => {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(DB_STORE, "readwrite");
+    tx.objectStore(DB_STORE).put(obj);
+    tx.oncomplete = () => { db.close(); resolve(true); };
+    tx.onerror = () => { db.close(); reject(tx.error); };
   });
+};
 
-  // ===== State =====
-  let state = {
-    chantier: {
-      projet: "", commune: "", zone: "", date: todayISO(),
-      soustraitant: "", chef: "",
-      controleur: "", controleurAutre: "",
-      nbTotalPoints: 0,
-      signatures: { controleur:"", entreprise:"", client:"" }
-    },
-    points: [ defaultPoint() ]
-  };
-
-  // ===== Load/Save =====
-  const save = () => localStorage.setItem(LS_KEY, JSON.stringify(state));
-  const load = () => {
-    const raw = localStorage.getItem(LS_KEY);
-    if (!raw) return;
-    try {
-      const parsed = JSON.parse(raw);
-      if (parsed && parsed.chantier && Array.isArray(parsed.points)) state = parsed;
-    } catch(e) {}
-  };
-
-  const ensureSignatures = () => {
-    state.chantier.signatures ||= { controleur:"", entreprise:"", client:"" };
-    state.chantier.signatures.controleur ||= "";
-    state.chantier.signatures.entreprise ||= "";
-    state.chantier.signatures.client ||= "";
-  };
-
-  // ===== Render =====
-  const renderPoint = (p, idx) => {
-    const showOther = (p.statut === "Autre");
-    const statutLabel = (p.statut === "Autre") ? (p.statut_autre || "Autre") : (p.statut || "");
-
-    return `
-      <section class="card" data-point-id="${p.id}">
-        <div class="point-head">
-          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
-            <strong>Point ${idx+1}</strong>
-            <span class="pill bad">Non conforme</span>
-            <span class="small">ID: ${p.id.slice(0,8)}</span>
-          </div>
-          <div class="btnrow">
-            <button class="btn secondary" type="button" data-action="gps">📍 GPS</button>
-            <button class="btn danger" type="button" data-action="remove">🗑️ Supprimer</button>
-          </div>
-        </div>
-
-        <div class="row" style="margin-top:12px;">
-          <div>
-            <label>N° point lumineux (obligatoire)</label>
-            <input value="${escapeHtml(p.numero)}" data-k="numero" placeholder="Ex: PL-12 / A22" />
-          </div>
-          <div>
-            <label>Adresse / repère</label>
-            <input value="${escapeHtml(p.repere)}" data-k="repere" placeholder="Ex: devant maison 24" />
-          </div>
-          <div>
-            <label>Latitude</label>
-            <input value="${escapeHtml(p.lat)}" data-k="lat" placeholder="Auto via bouton GPS" />
-          </div>
-          <div>
-            <label>Longitude</label>
-            <input value="${escapeHtml(p.lon)}" data-k="lon" placeholder="Auto via bouton GPS" />
-          </div>
-        </div>
-
-        <div class="row" style="margin-top:12px;">
-          <div>
-            <label>Date de reprise</label>
-            <input type="date" value="${escapeHtml(p.date_reprise || "")}" data-k="date_reprise" />
-          </div>
-          <div>
-            <label>Statut</label>
-            <select data-k="statut">
-              <option value="À reprendre" ${p.statut==="À reprendre"?"selected":""}>À reprendre</option>
-              <option value="En cours" ${p.statut==="En cours"?"selected":""}>En cours</option>
-              <option value="Repris" ${p.statut==="Repris"?"selected":""}>Repris</option>
-              <option value="Autre" ${p.statut==="Autre"?"selected":""}>Autre…</option>
-            </select>
-
-            <div style="margin-top:8px; ${showOther ? "" : "display:none;"}">
-              <input value="${escapeHtml(p.statut_autre || "")}" data-k="statut_autre" placeholder="Saisir le statut…" />
-            </div>
-
-            <div class="small" style="margin-top:6px;">Actuel : <strong>${escapeHtml(statutLabel)}</strong></div>
-          </div>
-        </div>
-
-        <h4 style="margin:14px 0 8px 0;">Commentaire / non-conformité</h4>
-        <textarea data-k="reserves_txt" placeholder="Observations, anomalies…">${escapeHtml(p.reserves_txt)}</textarea>
-
-        <h4 style="margin:14px 0 8px 0;">Photos</h4>
-        <input type="file" accept="image/*" multiple data-action="addPhotos" />
-        <div class="small">Photos stockées localement</div>
-
-        <div class="photos">
-          ${(p.photos || []).map((ph, i) => `
-            <div class="thumb">
-              <img src="${ph.dataUrl}" alt="photo" />
-              <div>
-                Photo ${i+1}
-                <button class="btn danger" type="button"
-                  style="margin-top:6px;padding:6px 8px;font-size:12px;"
-                  data-action="rmPhoto" data-photo-idx="${i}">Suppr.</button>
-              </div>
-            </div>
-          `).join("")}
-        </div>
-      </section>
-    `;
-  };
-
-  const render = () => {
-    byId("projet").value = state.chantier.projet || "";
-    byId("commune").value = state.chantier.commune || "";
-    byId("zone").value = state.chantier.zone || "";
-    byId("date").value = state.chantier.date || todayISO();
-    byId("soustraitant").value = state.chantier.soustraitant || "";
-    byId("chef").value = state.chantier.chef || "";
-    byId("controleur").value = state.chantier.controleur || "";
-    byId("controleurAutre").value = state.chantier.controleurAutre || "";
-    byId("nbTotalPoints").value = String(state.chantier.nbTotalPoints ?? 0);
-
-    byId("controleurAutreWrap").style.display =
-      (state.chantier.controleur === "__autre__") ? "block" : "none";
-
-    byId("pointsWrap").innerHTML = state.points.map(renderPoint).join("");
-
-    const totalProjet = Number(state.chantier.nbTotalPoints || 0);
-    const nonConformes = state.points.length;
-    const conformes = Math.max(totalProjet - nonConformes, 0);
-
-    byId("syntheseText").innerHTML = `
-      <div>Total points projet : <strong>${totalProjet}</strong></div>
-      <div>Points non conformes : <strong>${nonConformes}</strong></div>
-      <div>Points conformes : <strong>${conformes}</strong></div>
-    `;
-  };
-
-  // ===== Bind chantier =====
-  const bindChantier = () => {
-    const map = [
-      ["projet","projet"], ["commune","commune"], ["zone","zone"], ["date","date"],
-      ["soustraitant","soustraitant"], ["chef","chef"],
-      ["controleur","controleur"], ["nbTotalPoints","nbTotalPoints"]
-    ];
-
-    map.forEach(([id, key]) => {
-      const el = byId(id);
-      if (!el) return;
-
-      const apply = () => {
-        let v = el.value;
-        if (key === "nbTotalPoints") v = Number(v || 0);
-        state.chantier[key] = v;
-        save();
-        render();
-      };
-
-      el.addEventListener("input", apply);
-      el.addEventListener("change", apply);
-    });
-
-    const ctrlSelect = byId("controleur");
-    const ctrlOtherWrap = byId("controleurAutreWrap");
-    const ctrlOtherInput = byId("controleurAutre");
-
-    ctrlSelect.addEventListener("change", () => {
-      const isOther = ctrlSelect.value === "__autre__";
-      ctrlOtherWrap.style.display = isOther ? "block" : "none";
-      if (!isOther) {
-        state.chantier.controleurAutre = "";
-        ctrlOtherInput.value = "";
-        save();
-        render();
-      }
-    });
-
-    ctrlOtherInput.addEventListener("input", () => {
-      state.chantier.controleurAutre = ctrlOtherInput.value;
-      save();
-    });
-  };
-
-  // ===== Points events =====
-  const fileToDataUrl = (file) => new Promise((resolve, reject) => {
-    const r = new FileReader();
-    r.onload = () => resolve(r.result);
-    r.onerror = reject;
-    r.readAsDataURL(file);
+const idbGetManyByPoint = async (pointId) => {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(DB_STORE, "readonly");
+    const idx = tx.objectStore(DB_STORE).index("pointId");
+    const req = idx.getAll(pointId);
+    req.onsuccess = () => { const r = req.result || []; db.close(); resolve(r); };
+    req.onerror = () => { db.close(); reject(req.error); };
   });
+};
 
-  const handlePointsEvents = () => {
-    const wrap = byId("pointsWrap");
+const idbDelete = async (id) => {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(DB_STORE, "readwrite");
+    tx.objectStore(DB_STORE).delete(id);
+    tx.oncomplete = () => { db.close(); resolve(true); };
+    tx.onerror = () => { db.close(); reject(tx.error); };
+  });
+};
 
-    wrap.addEventListener("input", (e) => {
-      const card = e.target.closest("[data-point-id]");
-      if (!card) return;
+const idbClearAll = async () => {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(DB_STORE, "readwrite");
+    tx.objectStore(DB_STORE).clear();
+    tx.oncomplete = () => { db.close(); resolve(true); };
+    tx.onerror = () => { db.close(); reject(tx.error); };
+  });
+};
 
-      const pid = card.getAttribute("data-point-id");
-      const p = state.points.find(x => x.id === pid);
-      if (!p) return;
+/* ===== Images: compression + resize ===== */
+const compressImageToDataUrl = (file, opts = {}) => new Promise((resolve, reject) => {
+  const { maxW = 1280, maxH = 1280, quality = 0.75, mime = "image/jpeg" } = opts;
+  const img = new Image();
+  const url = URL.createObjectURL(file);
 
-      const k = e.target.getAttribute("data-k");
-      if (!k) return;
+  img.onload = () => {
+    let w = img.width, h = img.height;
+    const ratio = Math.min(maxW / w, maxH / h, 1);
+    const nw = Math.max(1, Math.round(w * ratio));
+    const nh = Math.max(1, Math.round(h * ratio));
 
-      p[k] = e.target.value;
-      save();
-    });
-
-    wrap.addEventListener("change", async (e) => {
-      const card = e.target.closest("[data-point-id]");
-      if (!card) return;
-
-      const pid = card.getAttribute("data-point-id");
-      const p = state.points.find(x => x.id === pid);
-      if (!p) return;
-
-      // Photos
-      if (e.target.getAttribute("data-action") === "addPhotos") {
-        const files = Array.from(e.target.files || []);
-        for (const f of files) {
-          const dataUrl = await fileToDataUrl(f);
-          p.photos.push({ dataUrl });
-        }
-        e.target.value = "";
-        save();
-        render();
-        return;
-      }
-
-      // Statut (select)
-      if (e.target.getAttribute("data-k") === "statut") {
-        p.statut = e.target.value;
-        if (p.statut !== "Autre") p.statut_autre = "";
-        save();
-        render();
-        return;
-      }
-    });
-
-    wrap.addEventListener("click", (e) => {
-      const btn = e.target.closest("button");
-      if (!btn) return;
-
-      const card = btn.closest("[data-point-id]");
-      if (!card) return;
-
-      const pid = card.getAttribute("data-point-id");
-      const action = btn.getAttribute("data-action");
-
-      if (action === "gps") {
-        const p = state.points.find(x => x.id === pid);
-        if (!p) return;
-
-        if (!navigator.geolocation) {
-          alert("Géolocalisation non disponible sur ce navigateur.");
-          return;
-        }
-
-        navigator.geolocation.getCurrentPosition(
-          (pos) => {
-            p.lat = String(pos.coords.latitude);
-            p.lon = String(pos.coords.longitude);
-            save();
-            render();
-          },
-          (err) => alert("GPS refusé ou indisponible : " + err.message),
-          { enableHighAccuracy: true, timeout: 10000 }
-        );
-        return;
-      }
-
-      if (action === "remove") {
-        if (state.points.length === 1) {
-          alert("Il faut au moins 1 point dans la fiche.");
-          return;
-        }
-        state.points = state.points.filter(x => x.id !== pid);
-        save();
-        render();
-        return;
-      }
-
-      if (action === "rmPhoto") {
-        const idx = Number(btn.getAttribute("data-photo-idx"));
-        const p = state.points.find(x => x.id === pid);
-        if (!p || Number.isNaN(idx)) return;
-
-        p.photos.splice(idx, 1);
-        save();
-        render();
-        return;
-      }
-    });
-  };
-
-  // ===== Signatures =====
-  const setupSignaturePad = (canvasId, clearBtnId, key) => {
-    const canvas = byId(canvasId);
-    const clearBtn = byId(clearBtnId);
-
+    const canvas = document.createElement("canvas");
+    canvas.width = nw; canvas.height = nh;
     const ctx = canvas.getContext("2d");
-    ctx.lineWidth = 2;
-    ctx.lineCap = "round";
-    ctx.lineJoin = "round";
+    ctx.drawImage(img, 0, 0, nw, nh);
+    URL.revokeObjectURL(url);
 
-    const existing = state.chantier.signatures?.[key];
-    if (existing) {
-      const img = new Image();
-      img.onload = () => {
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-      };
-      img.src = existing;
-    }
-
-    let drawing = false;
-
-    const getPos = (ev) => {
-      const rect = canvas.getBoundingClientRect();
-      const clientX = ev.touches ? ev.touches[0].clientX : ev.clientX;
-      const clientY = ev.touches ? ev.touches[0].clientY : ev.clientY;
-      return {
-        x: (clientX - rect.left) * (canvas.width / rect.width),
-        y: (clientY - rect.top) * (canvas.height / rect.height)
-      };
-    };
-
-    const start = (ev) => {
-      ev.preventDefault();
-      drawing = true;
-      const p = getPos(ev);
-      ctx.beginPath();
-      ctx.moveTo(p.x, p.y);
-    };
-
-    const move = (ev) => {
-      if (!drawing) return;
-      ev.preventDefault();
-      const p = getPos(ev);
-      ctx.lineTo(p.x, p.y);
-      ctx.stroke();
-    };
-
-    const end = (ev) => {
-      if (!drawing) return;
-      ev.preventDefault();
-      drawing = false;
-      state.chantier.signatures[key] = canvas.toDataURL("image/png");
-      save();
-    };
-
-    canvas.addEventListener("mousedown", start);
-    canvas.addEventListener("mousemove", move);
-    window.addEventListener("mouseup", end);
-
-    canvas.addEventListener("touchstart", start, { passive:false });
-    canvas.addEventListener("touchmove", move, { passive:false });
-    canvas.addEventListener("touchend", end, { passive:false });
-
-    clearBtn.addEventListener("click", () => {
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      state.chantier.signatures[key] = "";
-      save();
-    });
+    try {
+      resolve(canvas.toDataURL(mime, quality));
+    } catch (e) { reject(e); }
   };
+  img.onerror = (e) => { URL.revokeObjectURL(url); reject(e); };
+  img.src = url;
+});
 
-  const initSignatures = () => {
-    ensureSignatures();
-    setupSignaturePad("sigControleur", "clearSigControleur", "controleur");
-    setupSignaturePad("sigEntreprise", "clearSigEntreprise", "entreprise");
-    setupSignaturePad("sigClient", "clearSigClient", "client");
-  };
-
-  // ===== PDF (stable iPad) via iframe =====
-  const buildPdfHtml = () => {
-    const sigs = state.chantier.signatures || {};
-
-    const controleurNom =
-      state.chantier.controleur === "__autre__"
-        ? (state.chantier.controleurAutre || "")
-        : (state.chantier.controleur || "");
-
-    const logoSrc = (typeof LOGO_BASE64 !== "undefined" && String(LOGO_BASE64).startsWith("data:"))
-      ? LOGO_BASE64
-      : "logo.png";
-
-    return `<!doctype html>
-<html lang="fr">
-<head>
-  <meta charset="utf-8">
-  <base href="${location.href}">
-  <title>PV Réception</title>
-  <style>
-    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;margin:22px;line-height:1.35;}
-    .header{display:flex;gap:14px;align-items:center;border-bottom:2px solid #111827;padding-bottom:10px;margin-bottom:16px;}
-    .header img{height:46px;object-fit:contain;}
-    h1{margin:0;font-size:18px;}
-    .meta{font-size:12px;color:#555;margin-top:4px;}
-    table{width:100%;border-collapse:collapse;font-size:12px;}
-    th,td{border:1px solid #ddd;padding:8px;vertical-align:top;}
-    th{background:#f3f4f6;text-align:left;}
-    .bad{background:#fee2e2;color:#991b1b;font-weight:700;}
-    .nowrap{white-space:nowrap;}
-    .pics{display:flex;gap:6px;flex-wrap:wrap;}
-    .pic{width:48px;height:48px;object-fit:cover;border:1px solid #ddd;border-radius:6px;}
-    .more{font-size:11px;color:#555;align-self:center;}
-    @page { size: A4; margin: 12mm; }
-    @media print {
-      body{margin:14mm;}
-      thead{display:table-header-group;}
-      tr{page-break-inside:avoid;}
-    }
-  </style>
-</head>
-<body>
-  <div class="header">
-    <img src="${logoSrc}" alt="Logo">
-    <div>
-      <h1>PV – Points non conformes (lampadaires solaires)</h1>
-      <div class="meta">
-        Commune : <strong>${escapeHtml(state.chantier.commune)}</strong> |
-        Date : <strong>${escapeHtml(state.chantier.date)}</strong><br>
-        Projet : <strong>${escapeHtml(state.chantier.projet)}</strong><br>
-        Poseur : <strong>${escapeHtml(state.chantier.soustraitant)}</strong> |
-        Contrôleur : <strong>${escapeHtml(controleurNom)}</strong>
-      </div>
-    </div>
-  </div>
-
-  <table>
-    <thead>
-      <tr>
-        <th style="width:4%;">#</th>
-        <th style="width:12%;">N° point</th>
-        <th style="width:36%;">Non-conformité / Observation</th>
-        <th style="width:18%;">Photos</th>
-        <th style="width:18%;">Localisation</th>
-        <th style="width:12%;" class="nowrap">Date de reprise</th>
-        <th style="width:18%;">Statut</th>
-      </tr>
-    </thead>
-    <tbody>
-  ${state.points.map((p,i)=>{
-    const statutTxt = (p.statut === "Autre")
-      ? (p.statut_autre || "Autre")
-      : (p.statut || "");
-
-    const photos = (p.photos || []);
-    const first3 = photos.slice(0, 3);
-
-    return `
-    <tr>
-      <td>${i+1}</td>
-
-      <td><strong>${escapeHtml(p.numero)}</strong></td>
-
-      <td class="bad">${escapeHtml(p.reserves_txt || "—")}</td>
-
-      <td>
-        <div class="pics">
-          ${first3.map(ph => `
-            <img class="pic" src="${ph.dataUrl}" alt="photo">
-          `).join("")}
-          ${(photos.length > 3) ? `<div class="more">+${photos.length - 3}</div>` : ""}
-        </div>
-      </td>
-
-      <td>
-        ${escapeHtml(p.repere || "")}<br>
-        <span style="font-size:11px;color:#555;">
-          ${escapeHtml(p.lat || "")} ${(p.lat && p.lon) ? "•" : ""} ${escapeHtml(p.lon || "")}
-        </span>
-      </td>
-
-      <td class="nowrap">${escapeHtml(p.date_reprise || "")}</td>
-
-      <td>${escapeHtml(statutTxt)}</td>
-    </tr>`;
-  }).join("")}
-</tbody>
-  </table>
-  <h2 style="margin-top:16px;">Signatures</h2>
-  <table style="width:100%;border-collapse:collapse;">
-    <tr>
-      <td style="width:33%;padding:8px;border:1px solid #ddd;">
-        <strong>Contrôleur</strong><br>
-        ${sigs.controleur ? `<img src="${sigs.controleur}" style="width:100%;max-height:140px;object-fit:contain;border:1px solid #ddd;border-radius:8px;">` : `<em>Non signée</em>`}
-      </td>
-      <td style="width:33%;padding:8px;border:1px solid #ddd;">
-        <strong>Entreprise</strong><br>
-        ${sigs.entreprise ? `<img src="${sigs.entreprise}" style="width:100%;max-height:140px;object-fit:contain;border:1px solid #ddd;border-radius:8px;">` : `<em>Non signée</em>`}
-      </td>
-      <td style="width:33%;padding:8px;border:1px solid #ddd;">
-        <strong>Client</strong><br>
-        ${sigs.client ? `<img src="${sigs.client}" style="width:100%;max-height:140px;object-fit:contain;border:1px solid #ddd;border-radius:8px;">` : `<em>Non signée</em>`}
-      </td>
-    </tr>
-  </table>
-</body>
-</html>`;
-  };
-
-const waitForImages = async (doc) => {
-  const imgs = Array.from(doc.images || []);
-  await Promise.all(imgs.map(img => {
+/* ===== Wait images for PDF ===== */
+const waitForImages = (root) => {
+  const imgs = Array.from(root.querySelectorAll("img"));
+  return Promise.all(imgs.map(img => {
     if (img.complete && img.naturalWidth > 0) return Promise.resolve();
-    return new Promise(resolve => {
-      img.onload = () => resolve();
-      img.onerror = () => resolve(); // on ne bloque pas si une image fail
+    return new Promise((res) => {
+      img.onload = () => res();
+      img.onerror = () => res();
     });
   }));
 };
 
+/* =========================
+   State (sans statut)
+========================= */
+const defaultPoint = () => ({
+  id: "id-" + Date.now().toString(36) + "-" + Math.random().toString(36).substring(2, 8),
+  numero: "",
+  repere: "",
+  lat: "",
+  lon: "",
+  reserves_txt: "",
+  date_reprise: "",
+});
+
+let state = {
+  chantier: {
+    projet: "", commune: "", zone: "", date: todayISO(),
+    soustraitant: "", chef: "",
+    controleur: "", controleurAutre: "",
+    nbTotalPoints: 0,
+    signatures: { controleur:"", entreprise:"", client:"" }
+  },
+  points: [ defaultPoint() ]
+};
+
+const ensureSignatures = () => {
+  state.chantier.signatures ||= { controleur:"", entreprise:"", client:"" };
+  state.chantier.signatures.controleur ||= "";
+  state.chantier.signatures.entreprise ||= "";
+  state.chantier.signatures.client ||= "";
+};
+
+const saveState = () => {
+  try {
+    localStorage.setItem(LS_KEY, JSON.stringify(state));
+    return true;
+  } catch (e) {
+    alert("⚠️ Impossible de sauvegarder les données (storage). Détail : " + (e?.message || e));
+    return false;
+  }
+};
+
+const loadState = () => {
+  const raw = localStorage.getItem(LS_KEY);
+  if (!raw) return;
+  try {
+    const parsed = JSON.parse(raw);
+    if (parsed && parsed.chantier && Array.isArray(parsed.points)) state = parsed;
+  } catch(e) {}
+};
+
+/* =========================
+   Render
+========================= */
+
+const renderPoint = (p, idx, photos) => {
+  const numeroStyle = String(p.numero || "").trim() ? "" : "border:2px solid #ef4444;";
+
+  return `
+    <section class="card" data-point-id="${p.id}">
+      <div class="point-head">
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+          <strong>Point ${idx+1}</strong>
+          <span class="pill bad">Non conforme</span>
+          <span class="small">ID: ${p.id.slice(0,8)}</span>
+        </div>
+        <div class="btnrow">
+          <button class="btn secondary" type="button" data-action="gps">📍 GPS</button>
+          <button class="btn danger" type="button" data-action="remove">🗑️ Supprimer</button>
+        </div>
+      </div>
+
+      <div class="row" style="margin-top:12px;">
+        <div>
+          <label>N° point lumineux (obligatoire)</label>
+          <input style="${numeroStyle}" value="${escapeHtml(p.numero)}" data-k="numero" placeholder="Ex: PL-12 / A22" />
+        </div>
+        <div>
+          <label>Adresse / repère</label>
+          <input value="${escapeHtml(p.repere)}" data-k="repere" placeholder="Ex: devant maison 24" />
+        </div>
+        <div>
+          <label>Latitude</label>
+          <input value="${escapeHtml(p.lat)}" data-k="lat" placeholder="Auto via bouton GPS" />
+        </div>
+        <div>
+          <label>Longitude</label>
+          <input value="${escapeHtml(p.lon)}" data-k="lon" placeholder="Auto via bouton GPS" />
+        </div>
+      </div>
+
+      <div class="row" style="margin-top:12px;">
+        <div>
+          <label>Date de reprise</label>
+          <input type="date" value="${escapeHtml(p.date_reprise || "")}" data-k="date_reprise" />
+        </div>
+        <div></div>
+      </div>
+
+      <h4 style="margin:14px 0 8px 0;">Commentaire / non-conformité</h4>
+      <textarea data-k="reserves_txt" placeholder="Observations, anomalies…">${escapeHtml(p.reserves_txt)}</textarea>
+
+      <h4 style="margin:14px 0 8px 0;">Photos</h4>
+      <input type="file" accept="image/*" multiple data-action="addPhotos" />
+      <div class="small">Photos stockées localement (IndexedDB) + compressées</div>
+
+      <div class="photos">
+        ${(photos || []).map((ph, i) => `
+          <div class="thumb">
+            <img src="${ph.dataUrl}" alt="photo" />
+            <div>
+              Photo ${i+1}
+              <button class="btn danger" type="button"
+                style="margin-top:6px;padding:6px 8px;font-size:12px;"
+                data-action="rmPhoto" data-photo-id="${ph.id}">Suppr.</button>
+            </div>
+          </div>
+        `).join("")}
+      </div>
+    </section>
+  `;
+};
+
+const render = async () => {
+  byId("projet").value = state.chantier.projet || "";
+  byId("commune").value = state.chantier.commune || "";
+  byId("zone").value = state.chantier.zone || "";
+  byId("date").value = state.chantier.date || todayISO();
+  byId("soustraitant").value = state.chantier.soustraitant || "";
+  byId("chef").value = state.chantier.chef || "";
+  byId("controleur").value = state.chantier.controleur || "";
+  byId("controleurAutre").value = state.chantier.controleurAutre || "";
+  byId("nbTotalPoints").value = String(state.chantier.nbTotalPoints ?? 0);
+
+  byId("controleurAutreWrap").style.display =
+    (state.chantier.controleur === "__autre__") ? "block" : "none";
+
+  // charge photos par point (IndexedDB)
+  const chunks = [];
+  for (let i=0; i<state.points.length; i++){
+    const p = state.points[i];
+    const photos = await idbGetManyByPoint(p.id);
+    chunks.push(renderPoint(p, i, photos));
+  }
+  byId("pointsWrap").innerHTML = chunks.join("");
+
+  const totalProjet = Number(state.chantier.nbTotalPoints || 0);
+  const nonConformes = state.points.length;
+  const conformes = Math.max(totalProjet - nonConformes, 0);
+
+  byId("syntheseText").innerHTML = `
+    <div>Total points projet : <strong>${totalProjet}</strong></div>
+    <div>Points non conformes : <strong>${nonConformes}</strong></div>
+    <div>Points conformes : <strong>${conformes}</strong></div>
+  `;
+};
+
+/* =========================
+   Bind chantier
+========================= */
+const bindChantier = () => {
+  const map = [
+    ["projet","projet"], ["commune","commune"], ["zone","zone"], ["date","date"],
+    ["soustraitant","soustraitant"], ["chef","chef"],
+    ["controleur","controleur"], ["nbTotalPoints","nbTotalPoints"]
+  ];
+
+  map.forEach(([id, key]) => {
+    const el = byId(id);
+    if (!el) return;
+
+    const apply = async () => {
+      let v = el.value;
+      if (key === "nbTotalPoints") v = Number(v || 0);
+      state.chantier[key] = v;
+      saveState();
+      await render();
+    };
+
+    el.addEventListener("input", apply);
+    el.addEventListener("change", apply);
+  });
+
+  const ctrlSelect = byId("controleur");
+  const ctrlOtherWrap = byId("controleurAutreWrap");
+  const ctrlOtherInput = byId("controleurAutre");
+
+  ctrlSelect.addEventListener("change", async () => {
+    const isOther = ctrlSelect.value === "__autre__";
+    ctrlOtherWrap.style.display = isOther ? "block" : "none";
+    if (!isOther) {
+      state.chantier.controleurAutre = "";
+      ctrlOtherInput.value = "";
+      saveState();
+      await render();
+    }
+  });
+
+  ctrlOtherInput.addEventListener("input", () => {
+    state.chantier.controleurAutre = ctrlOtherInput.value;
+    saveState();
+  });
+};
+
+/* =========================
+   Points events
+========================= */
+const handlePointsEvents = () => {
+  const wrap = byId("pointsWrap");
+
+  wrap.addEventListener("input", (e) => {
+    const card = e.target.closest("[data-point-id]");
+    if (!card) return;
+
+    const pid = card.getAttribute("data-point-id");
+    const p = state.points.find(x => x.id === pid);
+    if (!p) return;
+
+    const k = e.target.getAttribute("data-k");
+    if (!k) return;
+
+    p[k] = e.target.value;
+    saveState();
+  });
+
+  wrap.addEventListener("change", async (e) => {
+    const card = e.target.closest("[data-point-id]");
+    if (!card) return;
+
+    const pid = card.getAttribute("data-point-id");
+    const p = state.points.find(x => x.id === pid);
+    if (!p) return;
+
+    if (e.target.getAttribute("data-action") === "addPhotos") {
+      const files = Array.from(e.target.files || []);
+      if (!files.length) return;
+
+      const MAX_PHOTOS_PER_POINT = 12;
+
+      // compte existant
+      const existing = await idbGetManyByPoint(pid);
+      if (existing.length >= MAX_PHOTOS_PER_POINT) {
+        alert("Limite atteinte : " + MAX_PHOTOS_PER_POINT + " photos max pour ce point.");
+        e.target.value = "";
+        return;
+      }
+
+      let remaining = MAX_PHOTOS_PER_POINT - existing.length;
+
+      for (const f of files) {
+        if (remaining <= 0) break;
+
+        try {
+          const dataUrl = await compressImageToDataUrl(f, { maxW: 1280, maxH: 1280, quality: 0.75 });
+          const photoId = "ph-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2,7);
+
+          await idbPut({
+            id: photoId,
+            pointId: pid,
+            dataUrl,
+            createdAt: Date.now()
+          });
+
+          remaining--;
+        } catch (err) {
+          alert("Impossible d'ajouter une photo : " + (err?.message || err));
+        }
+      }
+
+      e.target.value = ""; // important iOS
+      await render();
+    }
+  });
+
+  wrap.addEventListener("click", async (e) => {
+    const btn = e.target.closest("button");
+    if (!btn) return;
+
+    const card = btn.closest("[data-point-id]");
+    if (!card) return;
+
+    const pid = card.getAttribute("data-point-id");
+    const action = btn.getAttribute("data-action");
+
+    if (action === "gps") {
+      const p = state.points.find(x => x.id === pid);
+      if (!p) return;
+
+      if (!navigator.geolocation) {
+        alert("Géolocalisation non disponible sur ce navigateur.");
+        return;
+      }
+
+      navigator.geolocation.getCurrentPosition(
+        async (pos) => {
+          p.lat = String(pos.coords.latitude);
+          p.lon = String(pos.coords.longitude);
+          saveState();
+          await render();
+        },
+        (err) => alert("GPS refusé ou indisponible : " + err.message),
+        { enableHighAccuracy: true, timeout: 10000 }
+      );
+      return;
+    }
+
+    if (action === "remove") {
+      if (state.points.length === 1) {
+        alert("Il faut au moins 1 point dans la fiche.");
+        return;
+      }
+
+      // supprime photos du point
+      const photos = await idbGetManyByPoint(pid);
+      for (const ph of photos) await idbDelete(ph.id);
+
+      state.points = state.points.filter(x => x.id !== pid);
+      saveState();
+      await render();
+      return;
+    }
+
+    if (action === "rmPhoto") {
+      const photoId = btn.getAttribute("data-photo-id");
+      if (!photoId) return;
+      await idbDelete(photoId);
+      await render();
+      return;
+    }
+  });
+};
+
+/* =========================
+   Signatures
+========================= */
+const setupSignaturePad = (canvasId, clearBtnId, key) => {
+  const canvas = byId(canvasId);
+  const clearBtn = byId(clearBtnId);
+
+  const ctx = canvas.getContext("2d");
+  ctx.lineWidth = 2;
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+
+  const existing = state.chantier.signatures?.[key];
+  if (existing) {
+    const img = new Image();
+    img.onload = () => {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+    };
+    img.src = existing;
+  }
+
+  let drawing = false;
+
+  const getPos = (ev) => {
+    const rect = canvas.getBoundingClientRect();
+    const clientX = ev.touches ? ev.touches[0].clientX : ev.clientX;
+    const clientY = ev.touches ? ev.touches[0].clientY : ev.clientY;
+    return {
+      x: (clientX - rect.left) * (canvas.width / rect.width),
+      y: (clientY - rect.top) * (canvas.height / rect.height)
+    };
+  };
+
+  const start = (ev) => {
+    ev.preventDefault();
+    drawing = true;
+    const p = getPos(ev);
+    ctx.beginPath();
+    ctx.moveTo(p.x, p.y);
+  };
+
+  const move = (ev) => {
+    if (!drawing) return;
+    ev.preventDefault();
+    const p = getPos(ev);
+    ctx.lineTo(p.x, p.y);
+    ctx.stroke();
+  };
+
+  const end = (ev) => {
+    if (!drawing) return;
+    ev.preventDefault();
+    drawing = false;
+    state.chantier.signatures[key] = canvas.toDataURL("image/png");
+    saveState();
+  };
+
+  canvas.addEventListener("mousedown", start);
+  canvas.addEventListener("mousemove", move);
+  window.addEventListener("mouseup", end);
+
+  canvas.addEventListener("touchstart", start, { passive:false });
+  canvas.addEventListener("touchmove", move, { passive:false });
+  canvas.addEventListener("touchend", end, { passive:false });
+
+  clearBtn.addEventListener("click", () => {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    state.chantier.signatures[key] = "";
+    saveState();
+  });
+};
+
+const initSignatures = () => {
+  ensureSignatures();
+  setupSignaturePad("sigControleur", "clearSigControleur", "controleur");
+  setupSignaturePad("sigEntreprise", "clearSigEntreprise", "entreprise");
+  setupSignaturePad("sigClient", "clearSigClient", "client");
+};
+
+/* =========================
+   PDF (sans Statut)
+========================= */
+const buildPdfBody = async () => {
+  const sigs = state.chantier.signatures || {};
+  const controleurNom =
+    state.chantier.controleur === "__autre__"
+      ? (state.chantier.controleurAutre || "")
+      : (state.chantier.controleur || "");
+
+  const logoSrc = (typeof LOGO_BASE64 !== "undefined" && String(LOGO_BASE64).startsWith("data:"))
+    ? LOGO_BASE64
+    : "logo.png";
+
+  // prépare lignes avec photos (IDB)
+  const rows = [];
+  for (let i=0; i<state.points.length; i++){
+    const p = state.points[i];
+    const photos = await idbGetManyByPoint(p.id);
+    const first3 = photos.slice(0, 3);
+
+    rows.push(`
+      <tr style="page-break-inside:avoid;">
+        <td style="border:1px solid #ddd;padding:8px;vertical-align:top;">${i+1}</td>
+        <td style="border:1px solid #ddd;padding:8px;vertical-align:top;"><strong>${escapeHtml(p.numero)}</strong></td>
+        <td style="border:1px solid #ddd;padding:8px;vertical-align:top;background:#fee2e2;color:#991b1b;font-weight:700;">
+          ${escapeHtml(p.reserves_txt || "—")}
+        </td>
+        <td style="border:1px solid #ddd;padding:8px;vertical-align:top;">
+          <div style="display:flex;gap:6px;flex-wrap:wrap;">
+            ${first3.map(ph => `
+              <img src="${ph.dataUrl}" alt="photo" style="width:48px;height:48px;object-fit:cover;border:1px solid #ddd;border-radius:6px;">
+            `).join("")}
+            ${(photos.length > 3) ? `<div style="font-size:11px;color:#555;align-self:center;">+${photos.length - 3}</div>` : ""}
+          </div>
+        </td>
+        <td style="border:1px solid #ddd;padding:8px;vertical-align:top;">
+          ${escapeHtml(p.repere || "")}<br>
+          <span style="font-size:11px;color:#555;">
+            ${escapeHtml(p.lat || "")} ${(p.lat && p.lon) ? "•" : ""} ${escapeHtml(p.lon || "")}
+          </span>
+        </td>
+        <td style="border:1px solid #ddd;padding:8px;vertical-align:top;white-space:nowrap;">${escapeHtml(p.date_reprise || "")}</td>
+      </tr>
+    `);
+  }
+
+  return `
+    <div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;line-height:1.35;">
+      <div style="display:flex;gap:14px;align-items:center;border-bottom:2px solid #111827;padding-bottom:10px;margin-bottom:16px;">
+        <img src="${logoSrc}" alt="Logo" style="height:46px;object-fit:contain;">
+        <div>
+          <div style="font-size:18px;font-weight:700;margin:0;">PV – Points non conformes (lampadaires solaires)</div>
+          <div style="font-size:12px;color:#555;margin-top:4px;">
+            Commune : <strong>${escapeHtml(state.chantier.commune)}</strong> |
+            Date : <strong>${escapeHtml(state.chantier.date)}</strong><br>
+            Projet : <strong>${escapeHtml(state.chantier.projet)}</strong><br>
+            Poseur : <strong>${escapeHtml(state.chantier.soustraitant)}</strong> |
+            Contrôleur : <strong>${escapeHtml(controleurNom)}</strong>
+          </div>
+        </div>
+      </div>
+
+      <table style="width:100%;border-collapse:collapse;font-size:12px;">
+        <thead>
+          <tr>
+            <th style="border:1px solid #ddd;padding:8px;background:#f3f4f6;text-align:left;width:4%;">#</th>
+            <th style="border:1px solid #ddd;padding:8px;background:#f3f4f6;text-align:left;width:14%;">N° point</th>
+            <th style="border:1px solid #ddd;padding:8px;background:#f3f4f6;text-align:left;width:40%;">Non-conformité / Observation</th>
+            <th style="border:1px solid #ddd;padding:8px;background:#f3f4f6;text-align:left;width:18%;">Photos</th>
+            <th style="border:1px solid #ddd;padding:8px;background:#f3f4f6;text-align:left;width:18%;">Localisation</th>
+            <th style="border:1px solid #ddd;padding:8px;background:#f3f4f6;text-align:left;width:12%;">Date de reprise</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${rows.join("")}
+        </tbody>
+      </table>
+
+      <h2 style="margin-top:16px;">Signatures</h2>
+      <table style="width:100%;border-collapse:collapse;">
+        <tr>
+          <td style="width:33%;padding:8px;border:1px solid #ddd;">
+            <strong>Contrôleur</strong><br>
+            ${sigs.controleur ? `<img src="${sigs.controleur}" style="width:100%;max-height:140px;object-fit:contain;border:1px solid #ddd;border-radius:8px;">` : `<em>Non signée</em>`}
+          </td>
+          <td style="width:33%;padding:8px;border:1px solid #ddd;">
+            <strong>Entreprise</strong><br>
+            ${sigs.entreprise ? `<img src="${sigs.entreprise}" style="width:100%;max-height:140px;object-fit:contain;border:1px solid #ddd;border-radius:8px;">` : `<em>Non signée</em>`}
+          </td>
+          <td style="width:33%;padding:8px;border:1px solid #ddd;">
+            <strong>Client</strong><br>
+            ${sigs.client ? `<img src="${sigs.client}" style="width:100%;max-height:140px;object-fit:contain;border:1px solid #ddd;border-radius:8px;">` : `<em>Non signée</em>`}
+          </td>
+        </tr>
+      </table>
+    </div>
+  `;
+};
+
 const exportPDF = async () => {
   try {
-    // 1) Vérif numéros obligatoires
+    if (typeof html2pdf === "undefined") {
+      alert("Lib PDF non chargée (html2pdf). Vérifie la connexion / CDN.");
+      return;
+    }
+
     const missing = state.points
       .map((p, i) => (!String(p.numero || "").trim() ? `Point ${i+1}` : null))
       .filter(Boolean);
-
     if (missing.length) {
       alert("Numéro obligatoire manquant pour : " + missing.join(", "));
       return;
     }
 
-    // 2) Vérif signatures
     const sigs = state.chantier.signatures || {};
     if (!sigs.controleur || !sigs.entreprise || !sigs.client) {
       alert("Il manque une ou plusieurs signatures (Contrôleur / Entreprise / Client).");
       return;
     }
 
-    // 3) Overlay ON
-    const overlay = byId("pdfLoading");
-    if (overlay) overlay.style.display = "flex";
+    byId("pdfLoading").style.display = "flex";
 
-    let cleaned = false;
-    const cleanup = () => {
-      if (cleaned) return;
-      cleaned = true;
-      if (overlay) overlay.style.display = "none";
-    };
-
-    // 4) HTML PDF
-    const html = buildPdfHtml();
-
-    // 5) Créer iframe
-    let frame = document.getElementById("printFrame");
-    if (!frame) {
-      frame = document.createElement("iframe");
-      frame.id = "printFrame";
-      frame.style.position = "fixed";
-      frame.style.left = "-9999px";
-      frame.style.top = "0";
-      frame.style.width = "1px";
-      frame.style.height = "1px";
-      frame.style.border = "0";
-      document.body.appendChild(frame);
+    // IMPORTANT iOS: ouvrir un onglet tout de suite
+    const previewWin = window.open("", "_blank");
+    if (!previewWin) {
+      byId("pdfLoading").style.display = "none";
+      alert("Pop-up bloquée. Autorise les pop-ups pour ouvrir l’aperçu PDF.");
+      return;
     }
+    previewWin.document.write("<p style='font-family:system-ui'>Génération du PDF…</p>");
 
-    // 6) Écrire le HTML via document.write (plus stable iOS que srcdoc)
-    const doc = frame.contentWindow.document;
-    doc.open();
-    doc.write(html);
-    doc.close();
+    const container = document.createElement("div");
+    container.style.position = "fixed";
+    container.style.left = "0";
+    container.style.top = "0";
+    container.style.width = "794px";
+    container.style.opacity = "0";
+    container.style.pointerEvents = "none";
+    container.style.zIndex = "-1";
 
-    // 7) Attendre que tout soit prêt (images + mise en page)
-    await waitForImages(doc);
+    container.innerHTML = await buildPdfBody();
+    document.body.appendChild(container);
 
-    // iOS : petit délai pour être sûr que le layout est calculé
-    await new Promise(r => setTimeout(r, 200));
+    // attendre images + petit délai
+    await waitForImages(container);
+    await new Promise(r => setTimeout(r, 150));
 
-    // 8) IMPORTANT : retirer overlay juste avant print
-    cleanup();
+    const worker = html2pdf()
+      .set({
+        margin: [12, 10, 12, 10],
+        image: { type: "jpeg", quality: 0.95 },
+        html2canvas: {
+          scale: 2,
+          useCORS: true,
+          allowTaint: true,
+          backgroundColor: "#ffffff",
+          logging: false
+        },
+        jsPDF: { unit: "mm", format: "a4", orientation: "portrait" }
+      })
+      .from(container)
+      .toPdf();
 
-    // 9) Print iframe
-    frame.contentWindow.focus();
-    frame.contentWindow.print();
+    const pdf = await worker.get("pdf");
+    const blob = pdf.output("blob");
+    const blobUrl = URL.createObjectURL(blob);
 
-    // 10) sécurité : si iOS ne renvoie pas focus, on enlève overlay quand même
-    window.addEventListener("focus", cleanup, { once: true });
-    setTimeout(cleanup, 4000);
+    container.remove();
+    byId("pdfLoading").style.display = "none";
 
-  } catch (err) {
-    alert("Erreur export PDF : " + (err && err.message ? err.message : err));
-    const overlay = byId("pdfLoading");
-    if (overlay) overlay.style.display = "none";
+    previewWin.location.href = blobUrl;
+    setTimeout(() => URL.revokeObjectURL(blobUrl), 60000);
+
+  } catch (e) {
+    byId("pdfLoading").style.display = "none";
+    alert("Erreur PDF : " + (e && e.message ? e.message : e));
   }
 };
 
-  // ===== Buttons =====
-  const bindButtons = () => {
-    byId("addPointBtn").addEventListener("click", () => {
-      state.points.push(defaultPoint());
-      save();
-      render();
-      window.scrollTo({ top: document.body.scrollHeight, behavior: "smooth" });
+/* =========================
+   Buttons
+========================= */
+const bindButtons = () => {
+  byId("addPointBtn").addEventListener("click", async () => {
+    state.points.push(defaultPoint());
+    saveState();
+    await render();
+    window.scrollTo({ top: document.body.scrollHeight, behavior: "smooth" });
+  });
+
+  byId("pdfBtn").addEventListener("click", exportPDF);
+
+  byId("resetBtn").addEventListener("click", async () => {
+    if (!confirm("Tout effacer ? (Données + photos locales seront supprimées)")) return;
+
+    localStorage.removeItem(LS_KEY);
+    await idbClearAll();
+
+    state = {
+      chantier: {
+        projet: "", commune: "", zone: "", date: todayISO(),
+        soustraitant: "", chef: "",
+        controleur: "", controleurAutre: "",
+        nbTotalPoints: 0,
+        signatures: { controleur:"", entreprise:"", client:"" }
+      },
+      points: [ defaultPoint() ]
+    };
+
+    saveState();
+    await render();
+
+    // reset listeners signatures proprement
+    ["sigControleur","sigEntreprise","sigClient"].forEach(id => {
+      const oldC = byId(id);
+      const newC = oldC.cloneNode(true);
+      oldC.parentNode.replaceChild(newC, oldC);
     });
 
-    byId("pdfBtn").addEventListener("click", exportPDF);
+    initSignatures();
+  });
+};
 
-    byId("resetBtn").addEventListener("click", () => {
-      if (!confirm("Tout effacer ? (Les données locales seront supprimées)")) return;
-
-      localStorage.removeItem(LS_KEY);
-      state = {
-        chantier: {
-          projet: "", commune: "", zone: "", date: todayISO(),
-          soustraitant: "", chef: "",
-          controleur: "", controleurAutre: "",
-          nbTotalPoints: 0,
-          signatures: { controleur:"", entreprise:"", client:"" }
-        },
-        points: [ defaultPoint() ]
-      };
-
-      save();
-      render();
-      initSignatures();
-    });
-  };
-
-  // ===== Init =====
-  load();
+/* =========================
+   Init
+========================= */
+(async () => {
+  loadState();
   if (!state.chantier.date) state.chantier.date = todayISO();
   if (!state.points.length) state.points = [ defaultPoint() ];
   ensureSignatures();
+
   bindChantier();
   handlePointsEvents();
   bindButtons();
-  render();
-  save();
+  await render();
+  saveState();
   initSignatures();
+})();
 </script>
+
 </body>
 </html>
