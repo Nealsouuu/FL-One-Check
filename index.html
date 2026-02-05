@@ -818,15 +818,30 @@ const buildPdfBody = async () => {
         <tr>
           <td style="width:33%;padding:8px;border:1px solid #ddd;">
             <strong>Contrôleur</strong><br>
-            ${sigs.controleur ? `<img src="${sigs.controleur}" style="width:100%;max-height:140px;object-fit:contain;border:1px solid #ddd;border-radius:8px;">` : `<em>Non signée</em>`}
+            ${sigs.controleur ? `<img src="${sigs.controleur}" style="width:100%;max-height:140px;object-fit:contain;border:1px solid #ddd;border-radius:8px;">` : `
+    <div style="width:100%;height:120px;border:2px solid #111;border-radius:8px;"></div>
+    <div style="font-size:11px;color:#555;margin-top:6px;text-align:center;">
+      Nom / Date / Signature
+    </div>
+  `}
           </td>
           <td style="width:33%;padding:8px;border:1px solid #ddd;">
             <strong>Entreprise</strong><br>
-            ${sigs.entreprise ? `<img src="${sigs.entreprise}" style="width:100%;max-height:140px;object-fit:contain;border:1px solid #ddd;border-radius:8px;">` : `<em>Non signée</em>`}
+            ${sigs.entreprise ? `<img src="${sigs.entreprise}" style="width:100%;max-height:140px;object-fit:contain;border:1px solid #ddd;border-radius:8px;">` : `
+    <div style="width:100%;height:120px;border:2px solid #111;border-radius:8px;"></div>
+    <div style="font-size:11px;color:#555;margin-top:6px;text-align:center;">
+      Nom / Date / Signature
+    </div>
+  `}
           </td>
           <td style="width:33%;padding:8px;border:1px solid #ddd;">
             <strong>Client</strong><br>
-            ${sigs.client ? `<img src="${sigs.client}" style="width:100%;max-height:140px;object-fit:contain;border:1px solid #ddd;border-radius:8px;">` : `<em>Non signée</em>`}
+            ${sigs.client ? `<img src="${sigs.client}" style="width:100%;max-height:140px;object-fit:contain;border:1px solid #ddd;border-radius:8px;">` : `
+    <div style="width:100%;height:120px;border:2px solid #111;border-radius:8px;"></div>
+    <div style="font-size:11px;color:#555;margin-top:6px;text-align:center;">
+      Nom / Date / Signature
+    </div>
+  `}
           </td>
         </tr>
       </table>
@@ -1019,6 +1034,7 @@ const bindButtons = () => {
 
 </body>
 </html>
+
 
 
 
