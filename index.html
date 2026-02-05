@@ -394,7 +394,7 @@ const renderPoint = (p, idx, photos) => {
 
       <div class="row" style="margin-top:12px;">
         <div>
-          <label>N° point lumineux (obligatoire)</label>
+          <label>Nb point lumineux (obligatoire)</label>
           <input style="${numeroStyle}" value="${escapeHtml(p.numero)}" data-k="numero" placeholder="Ex: PL-12 / A22" />
         </div>
         <div>
@@ -801,7 +801,7 @@ const buildPdfBody = async () => {
         <thead>
           <tr>
             <th style="border:1px solid #ddd;padding:8px;background:#f3f4f6;text-align:left;width:4%;">#</th>
-            <th style="border:1px solid #ddd;padding:8px;background:#f3f4f6;text-align:left;width:10%;">N° point</th>
+            <th style="border:1px solid #ddd;padding:8px;background:#f3f4f6;text-align:left;width:10%;">Nb point</th>
             <th style="border:1px solid #ddd;padding:8px;background:#f3f4f6;text-align:left;width:40%;">Non-conformité / Observation</th>
             <th style="border:1px solid #ddd;padding:8px;background:#f3f4f6;text-align:left;width:14%;">Photos</th>
             <th style="border:1px solid #ddd;padding:8px;background:#f3f4f6;text-align:left;width:18%;">Localisation</th>
@@ -1034,6 +1034,7 @@ const bindButtons = () => {
 
 </body>
 </html>
+
 
 
 
