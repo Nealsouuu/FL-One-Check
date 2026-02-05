@@ -851,12 +851,6 @@ const exportPDF = async () => {
       return;
     }
 
-    const sigs = state.chantier.signatures || {};
-    if (!sigs.controleur || !sigs.entreprise || !sigs.client) {
-      alert("Il manque une ou plusieurs signatures (Contrôleur / Entreprise / Client).");
-      return;
-    }
-
     byId("pdfLoading").style.display = "flex";
 
     container = document.createElement("div");
@@ -1025,6 +1019,7 @@ const bindButtons = () => {
 
 </body>
 </html>
+
 
 
 
