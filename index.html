@@ -126,11 +126,6 @@
         <label>Nom du contrôleur</label>
         <input id="controleurAutre" placeholder="Saisir le nom" />
       </div>
-
-      <div>
-        <label>Nombre total de points (projet)</label>
-        <input id="nbTotalPoints" type="number" min="0" step="1" placeholder="Ex: 120" />
-      </div>
     </div>
 
     <div class="btnrow" style="margin-top:12px;">
@@ -452,8 +447,7 @@ const render = async () => {
   byId("chef").value = state.chantier.chef || "";
   byId("controleur").value = state.chantier.controleur || "";
   byId("controleurAutre").value = state.chantier.controleurAutre || "";
-  byId("nbTotalPoints").value = String(state.chantier.nbTotalPoints ?? 0);
-
+  
   byId("controleurAutreWrap").style.display =
     (state.chantier.controleur === "__autre__") ? "block" : "none";
 
@@ -466,15 +460,10 @@ const render = async () => {
   }
   byId("pointsWrap").innerHTML = chunks.join("");
 
-  const totalProjet = Number(state.chantier.nbTotalPoints || 0);
-  const nonConformes = state.points.length;
-  const conformes = Math.max(totalProjet - nonConformes, 0);
-
   byId("syntheseText").innerHTML = `
-    <div>Total points projet : <strong>${totalProjet}</strong></div>
-    <div>Points non conformes : <strong>${nonConformes}</strong></div>
-    <div>Points conformes : <strong>${conformes}</strong></div>
-  `;
+  <div>Points non conformes : <strong>${state.points.length}</strong></div>
+`;
+
 };
 
 /* =========================
@@ -484,7 +473,7 @@ const bindChantier = () => {
   const map = [
     ["projet","projet"], ["commune","commune"], ["zone","zone"], ["date","date"],
     ["soustraitant","soustraitant"], ["chef","chef"],
-    ["controleur","controleur"], ["nbTotalPoints","nbTotalPoints"]
+    ["controleur","controleur"],
   ];
 
   map.forEach(([id, key]) => {
@@ -994,7 +983,6 @@ const bindButtons = () => {
         projet: "", commune: "", zone: "", date: todayISO(),
         soustraitant: "", chef: "",
         controleur: "", controleurAutre: "",
-        nbTotalPoints: 0,
         signatures: { controleur:"", entreprise:"", client:"" }
       },
       points: [ defaultPoint() ]
@@ -1031,14 +1019,5 @@ const bindButtons = () => {
   initSignatures();
 })();
 </script>
-
 </body>
 </html>
-
-
-
-
-
-
-
-
