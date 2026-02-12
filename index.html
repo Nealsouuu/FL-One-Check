@@ -101,8 +101,19 @@
       </div>
 
       <div>
-        <label>Poseur</label>
-        <input id="soustraitant" placeholder="Nom entreprise" />
+        <select id="poseur">
+    <option value="">— Sélectionner —</option>
+    <option value="ELECTROMONTAGE">ELECTROMONTAGE</option>
+    <option value="SPIE">SPIE</option>
+    <option value="BYES">BYES</option>
+    <option value="INEO">INEO</option>
+    <option value="__autre__">Autre…</option>
+  </select>
+</div>
+
+<div id="poseurAutreWrap" style="display:none;">
+  <label>Nom du poseur</label>
+  <input id="poseurAutre" placeholder="Saisir le nom" />
       </div>
 
       <div>
@@ -332,7 +343,7 @@ const defaultPoint = () => ({
 let state = {
   chantier: {
     projet: "", commune: "", zone: "", date: todayISO(),
-    soustraitant: "", chef: "",
+    poseur: "", poseurAutre: "", chef: "",
     controleur: "", controleurAutre: "",
     nbTotalPoints: 0,
     signatures: { controleur:"", entreprise:"", client:"" }
@@ -443,7 +454,10 @@ const render = async () => {
   byId("commune").value = state.chantier.commune || "";
   byId("zone").value = state.chantier.zone || "";
   byId("date").value = state.chantier.date || todayISO();
-  byId("soustraitant").value = state.chantier.soustraitant || "";
+  byId("poseur").value = state.chantier.poseur || "";
+  byId("poseurAutre").value = state.chantier.poseurAutre || "";
+  byId("poseurAutreWrap").style.display =
+  (state.chantier.poseur === "__autre__") ? "block" : "none";
   byId("chef").value = state.chantier.chef || "";
   byId("controleur").value = state.chantier.controleur || "";
   byId("controleurAutre").value = state.chantier.controleurAutre || "";
@@ -472,7 +486,7 @@ const render = async () => {
 const bindChantier = () => {
   const map = [
     ["projet","projet"], ["commune","commune"], ["zone","zone"], ["date","date"],
-    ["soustraitant","soustraitant"], ["chef","chef"],
+    ["poseur","poseur"], ["chef","chef"],
     ["controleur","controleur"],
   ];
 
@@ -511,6 +525,27 @@ const bindChantier = () => {
     state.chantier.controleurAutre = ctrlOtherInput.value;
     saveState();
   });
+
+  const poseurSelect = byId("poseur");
+  const poseurOtherWrap = byId("poseurAutreWrap");
+  const poseurOtherInput = byId("poseurAutre");
+
+  poseurSelect.addEventListener("change", async () => {
+  const isOther = poseurSelect.value === "__autre__";
+  poseurOtherWrap.style.display = isOther ? "block" : "none";
+  if (!isOther) {
+    state.chantier.poseurAutre = "";
+    poseurOtherInput.value = "";
+    saveState();
+    await render();
+  }
+});
+
+poseurOtherInput.addEventListener("input", () => {
+  state.chantier.poseurAutre = poseurOtherInput.value;
+  saveState();
+});
+
 };
 
 /* =========================
@@ -725,62 +760,87 @@ const initSignatures = () => {
    PDF (sans Statut)
 ========================= */
 const buildPdfBody = async () => {
+
   const sigs = state.chantier.signatures || {};
+
   const controleurNom =
     state.chantier.controleur === "__autre__"
       ? (state.chantier.controleurAutre || "")
       : (state.chantier.controleur || "");
 
-    // Privilégie un dataURL si dispo ; sinon même origine SANS cache-buster
-    const logoSrc = (typeof LOGO_BASE64 !== "undefined" && String(LOGO_BASE64).startsWith("data:"))
+  const poseurNom =
+    state.chantier.poseur === "__autre__"
+      ? (state.chantier.poseurAutre || "")
+      : (state.chantier.poseur || "");
+
+  // Logo (cache-buster iOS)
+  const logoSrc =
+    (typeof LOGO_BASE64 !== "undefined" && String(LOGO_BASE64).startsWith("data:"))
       ? LOGO_BASE64
-      : "logo.png";
+      : ("logo.png?v=" + Date.now());
 
   // prépare lignes avec photos (IDB)
   const rows = [];
-  for (let i=0; i<state.points.length; i++){
+  for (let i = 0; i < state.points.length; i++) {
+
     const p = state.points[i];
     const photos = await idbGetManyByPoint(p.id);
     const first3 = photos.slice(0, 3);
 
     rows.push(`
       <tr style="page-break-inside:avoid;">
-        <td style="border:1px solid #ddd;padding:8px;vertical-align:top;">${i+1}</td>
-        <td style="border:1px solid #ddd;padding:8px;vertical-align:top;"><strong>${escapeHtml(p.numero)}</strong></td>
+        <td style="border:1px solid #ddd;padding:8px;vertical-align:top;">${i + 1}</td>
+        <td style="border:1px solid #ddd;padding:8px;vertical-align:top;">
+          <strong>${escapeHtml(p.numero)}</strong>
+        </td>
         <td style="border:1px solid #ddd;padding:8px;vertical-align:top;background:#fee2e2;color:#991b1b;font-weight:700;">
           ${escapeHtml(p.reserves_txt || "—")}
         </td>
         <td style="border:1px solid #ddd;padding:8px;vertical-align:top;">
           <div style="display:flex;gap:8px;flex-wrap:wrap;">
-          ${first3.map(ph => `
-            <img src="${ph.dataUrl}" alt="Photo"
+            ${first3.map(ph => `
+              <img src="${ph.dataUrl}" alt="Photo"
                 style="height:85px;width:auto;object-fit:cover;border:1px solid #ddd;border-radius:6px;">
-          `).join("")}
-            ${(photos.length > 3) ? `<div style="font-size:11px;color:#555;align-self:center;">+${photos.length - 3}</div>` : ""}
+            `).join("")}
+            ${(photos.length > 3)
+              ? `<div style="font-size:11px;color:#555;align-self:center;">
+                  +${photos.length - 3}
+                </div>`
+              : ""}
           </div>
         </td>
         <td style="border:1px solid #ddd;padding:8px;vertical-align:top;">
           ${escapeHtml(p.repere || "")}<br>
           <span style="font-size:11px;color:#555;">
-            ${escapeHtml(p.lat || "")} ${(p.lat && p.lon) ? "•" : ""} ${escapeHtml(p.lon || "")}
+            ${escapeHtml(p.lat || "")}
+            ${(p.lat && p.lon) ? " • " : ""}
+            ${escapeHtml(p.lon || "")}
           </span>
         </td>
-        <td style="border:1px solid #ddd;padding:8px;vertical-align:top;white-space:nowrap;">${escapeHtml(p.date_reprise || "")}</td>
+        <td style="border:1px solid #ddd;padding:8px;vertical-align:top;white-space:nowrap;">
+          ${escapeHtml(p.date_reprise || "")}
+        </td>
       </tr>
     `);
   }
 
   return `
     <div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;line-height:1.35;">
+
       <div style="display:flex;gap:14px;align-items:center;border-bottom:2px solid #111827;padding-bottom:10px;margin-bottom:16px;">
-        <img src="${logoSrc}" alt="Logo" crossorigin="anonymous" style="height:121px;width:auto; object-fit:contain;">
+        <img src="${logoSrc}" alt="Logo" crossorigin="anonymous"
+          style="height:121px;width:auto;object-fit:contain;">
+
         <div>
-          <div style="font-size:18px;font-weight:700;margin:0;">PV – Points non conformes (Réserves)</div>
+          <div style="font-size:18px;font-weight:700;margin:0;">
+            PV – Points non conformes (Réserves)
+          </div>
+
           <div style="font-size:12px;color:#555;margin-top:4px;">
             Commune : <strong>${escapeHtml(state.chantier.commune)}</strong> |
             Date : <strong>${escapeHtml(state.chantier.date)}</strong><br>
             Projet : <strong>${escapeHtml(state.chantier.projet)}</strong><br>
-            Poseur : <strong>${escapeHtml(state.chantier.soustraitant)}</strong> |
+            Poseur : <strong>${escapeHtml(poseurNom)}</strong> |
             Contrôleur : <strong>${escapeHtml(controleurNom)}</strong>
           </div>
         </div>
@@ -797,166 +857,55 @@ const buildPdfBody = async () => {
             <th style="border:1px solid #ddd;padding:8px;background:#f3f4f6;text-align:left;width:16%;">Date de reprise</th>
           </tr>
         </thead>
+
         <tbody>
           ${rows.join("")}
         </tbody>
       </table>
 
       <h2 style="margin-top:16px;">Signatures</h2>
+
       <table style="width:100%;border-collapse:collapse;">
         <tr>
+
           <td style="width:33%;padding:8px;border:1px solid #ddd;">
             <strong>Contrôleur</strong><br>
-            ${sigs.controleur ? `<img src="${sigs.controleur}" style="width:100%;max-height:140px;object-fit:contain;border:1px solid #ddd;border-radius:8px;">` : `
-    <div style="width:100%;height:120px;border:2px solid #111;border-radius:8px;"></div>
-    <div style="font-size:11px;color:#555;margin-top:6px;text-align:center;">
-      Nom / Date / Signature
-    </div>
-  `}
+            ${sigs.controleur
+              ? `<img src="${sigs.controleur}" style="width:100%;max-height:140px;object-fit:contain;border:1px solid #ddd;border-radius:8px;">`
+              : `<div style="width:100%;height:120px;border:2px solid #111;border-radius:8px;"></div>
+                 <div style="font-size:11px;color:#555;margin-top:6px;text-align:center;">
+                   Nom / Date / Signature
+                 </div>`
+            }
           </td>
+
           <td style="width:33%;padding:8px;border:1px solid #ddd;">
             <strong>Entreprise</strong><br>
-            ${sigs.entreprise ? `<img src="${sigs.entreprise}" style="width:100%;max-height:140px;object-fit:contain;border:1px solid #ddd;border-radius:8px;">` : `
-    <div style="width:100%;height:120px;border:2px solid #111;border-radius:8px;"></div>
-    <div style="font-size:11px;color:#555;margin-top:6px;text-align:center;">
-      Nom / Date / Signature
-    </div>
-  `}
+            ${sigs.entreprise
+              ? `<img src="${sigs.entreprise}" style="width:100%;max-height:140px;object-fit:contain;border:1px solid #ddd;border-radius:8px;">`
+              : `<div style="width:100%;height:120px;border:2px solid #111;border-radius:8px;"></div>
+                 <div style="font-size:11px;color:#555;margin-top:6px;text-align:center;">
+                   Nom / Date / Signature
+                 </div>`
+            }
           </td>
+
           <td style="width:33%;padding:8px;border:1px solid #ddd;">
             <strong>Client</strong><br>
-            ${sigs.client ? `<img src="${sigs.client}" style="width:100%;max-height:140px;object-fit:contain;border:1px solid #ddd;border-radius:8px;">` : `
-    <div style="width:100%;height:120px;border:2px solid #111;border-radius:8px;"></div>
-    <div style="font-size:11px;color:#555;margin-top:6px;text-align:center;">
-      Nom / Date / Signature
-    </div>
-  `}
+            ${sigs.client
+              ? `<img src="${sigs.client}" style="width:100%;max-height:140px;object-fit:contain;border:1px solid #ddd;border-radius:8px;">`
+              : `<div style="width:100%;height:120px;border:2px solid #111;border-radius:8px;"></div>
+                 <div style="font-size:11px;color:#555;margin-top:6px;text-align:center;">
+                   Nom / Date / Signature
+                 </div>`
+            }
           </td>
+
         </tr>
       </table>
+
     </div>
   `;
-};
-
-const exportPDF = async () => {
-  let container = null;
-
-  try {
-    if (!window.html2canvas || !window.jspdf?.jsPDF) {
-      alert("Librairies manquantes (html2canvas/jsPDF). Recharge la page.");
-      return;
-    }
-
-    const missing = state.points
-      .map((p, i) => (!String(p.numero || "").trim() ? `Point ${i + 1}` : null))
-      .filter(Boolean);
-    if (missing.length) {
-      alert("Numéro obligatoire manquant pour : " + missing.join(", "));
-      return;
-    }
-
-    byId("pdfLoading").style.display = "flex";
-
-    container = document.createElement("div");
-    container.style.position = "fixed";
-    container.style.left = "0";
-    container.style.top = "0";
-    container.style.width = "794px"; // ~ A4 @96dpi
-    container.style.background = "#fff";
-    container.style.opacity = "1";
-    container.style.pointerEvents = "none";
-    container.style.visibility = "visible";
-    container.style.zIndex = "-1";
-
-    // (optionnel mais conseillé)
-    // container.style.padding = "10px";
-    // container.style.boxSizing = "border-box";
-
-    container.innerHTML = await buildPdfBody();
-    document.body.appendChild(container);
-
-    await new Promise(r => requestAnimationFrame(r));
-    await new Promise(r => requestAnimationFrame(r));
-    if (document.fonts && document.fonts.ready) {
-      try { await document.fonts.ready; } catch {}
-    }
-    await waitForImages(container);
-    await new Promise(r => setTimeout(r, 120));
-
-    const canvas = await html2canvas(container, {
-      scale: 1.35,
-      useCORS: true,
-      allowTaint: false,
-      backgroundColor: "#ffffff",
-      logging: false,
-      imageTimeout: 15000
-    });
-
-    // --- PDF
-    const { jsPDF } = window.jspdf;
-    const pdf = new jsPDF({ unit: "mm", format: "a4", orientation: "portrait" });
-
-    const pdfW = pdf.internal.pageSize.getWidth();
-    const pdfH = pdf.internal.pageSize.getHeight();
-
-    const M = 8;                 // marge en mm
-    const usableW = pdfW - 2 * M;
-    const usableH = pdfH - 2 * M;
-
-    const imgW = usableW;
-    const imgH = canvas.height * (imgW / canvas.width);
-
-    if (imgH <= usableH) {
-      const imgData = canvas.toDataURL("image/jpeg", 0.95);
-      pdf.addImage(imgData, "JPEG", M, M, imgW, imgH);
-    } else {
-      const pageCanvas = document.createElement("canvas");
-      const pageCtx = pageCanvas.getContext("2d");
-
-      const pageHpx = Math.floor(canvas.width * (usableH / usableW));
-      let y = 0;
-      let first = true;
-
-      while (y < canvas.height) {
-        const sliceH = Math.min(pageHpx, canvas.height - y);
-
-        pageCanvas.width = canvas.width;
-        pageCanvas.height = sliceH;
-
-        pageCtx.clearRect(0, 0, pageCanvas.width, pageCanvas.height);
-        pageCtx.drawImage(
-          canvas,
-          0, y,
-          canvas.width, sliceH,
-          0, 0,
-          pageCanvas.width, sliceH
-        );
-
-        const pageImg = pageCanvas.toDataURL("image/jpeg", 0.95);
-        const pageImgH_mm = (sliceH * imgW) / canvas.width;
-
-        if (!first) pdf.addPage();
-        first = false;
-
-        pdf.addImage(pageImg, "JPEG", M, M, imgW, pageImgH_mm);
-
-        y += sliceH;
-      }
-    }
-
-    byId("pdfLoading").style.display = "none";
-
-    const blob = pdf.output("blob");
-    const url = URL.createObjectURL(blob);
-    window.open(url, "_blank");
-    setTimeout(() => URL.revokeObjectURL(url), 60000);
-
-  } catch (e) {
-    byId("pdfLoading").style.display = "none";
-    alert("Erreur PDF : " + (e?.message || e));
-  } finally {
-    if (container) container.remove();
-  }
 };
 
 /* =========================
@@ -981,7 +930,8 @@ const bindButtons = () => {
     state = {
       chantier: {
         projet: "", commune: "", zone: "", date: todayISO(),
-        soustraitant: "", chef: "",
+        poseur: "", PoseurAutre: "",
+        chef:"",
         controleur: "", controleurAutre: "",
         signatures: { controleur:"", entreprise:"", client:"" }
       },
