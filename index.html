@@ -19,6 +19,7 @@
     input, select, textarea, button {
       width: 100%; padding: 10px; border-radius: 10px; border: 1px solid #d1d5db; background: #fff;
       font-size: 14px;
+      box-sizing: border-box;
     }
     textarea { min-height: 70px; resize: vertical; }
 
@@ -101,19 +102,20 @@
       </div>
 
       <div>
+        <label>Poseur</label>
         <select id="poseur">
-    <option value="">— Sélectionner —</option>
-    <option value="ELECTROMONTAGE">ELECTROMONTAGE</option>
-    <option value="SPIE">SPIE</option>
-    <option value="BYES">BYES</option>
-    <option value="INEO">INEO</option>
-    <option value="__autre__">Autre…</option>
-  </select>
-</div>
+          <option value="">— Sélectionner —</option>
+          <option value="ELECTROMONTAGE">ELECTROMONTAGE</option>
+          <option value="SPIE">SPIE</option>
+          <option value="BYES">BYES</option>
+          <option value="INEO">INEO</option>
+          <option value="__autre__">Autre…</option>
+        </select>
+      </div>
 
-<div id="poseurAutreWrap" style="display:none;">
-  <label>Nom du poseur</label>
-  <input id="poseurAutre" placeholder="Saisir le nom" />
+      <div id="poseurAutreWrap" style="display:none;">
+        <label>Nom du poseur</label>
+        <input id="poseurAutre" placeholder="Saisir le nom" />
       </div>
 
       <div>
@@ -139,10 +141,29 @@
       </div>
     </div>
 
+    <!-- MES FICHES -->
+    <div class="row" style="margin-top:12px;">
+      <div>
+        <label>📂 Mes fiches</label>
+        <select id="ficheSelect"></select>
+        <div class="small" style="margin-top:6px;">Conseil : duplique une fiche “type”, puis modifie.</div>
+      </div>
+
+      <div>
+        <label>Actions fiche</label>
+        <div class="btnrow">
+          <button class="btn secondary" id="newFicheBtn" type="button">➕ Nouvelle</button>
+          <button class="btn" id="saveFicheBtn" type="button">💾 Sauver</button>
+          <button class="btn secondary" id="dupFicheBtn" type="button">📄 Dupliquer</button>
+          <button class="btn danger" id="delFicheBtn" type="button">🗑️ Supprimer</button>
+        </div>
+      </div>
+    </div>
+
     <div class="btnrow" style="margin-top:12px;">
       <button class="btn" id="addPointBtn" type="button">➕ Ajouter un point non conforme</button>
       <button class="btn secondary" id="pdfBtn" type="button">🧾 Exporter PDF</button>
-      <button class="btn danger" id="resetBtn" type="button">🗑️ Réinitialiser</button>
+      <button class="btn danger" id="resetBtn" type="button">🧽 Vider la fiche (courante)</button>
     </div>
   </section>
 
@@ -197,27 +218,30 @@
   </div>
 </div>
 
-<!-- html2canvas standalone (expose le global html2canvas) -->
+<!-- html2canvas (global html2canvas) -->
 <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
-
-<!-- html2pdf bundle -->
-<script src="https://cdn.jsdelivr.net/npm/html2pdf.js@0.10.1/dist/html2pdf.bundle.min.js"></script>
-
-<!-- jsPDF UMD (expose window.jspdf.jsPDF) -->
+<!-- jsPDF UMD (global window.jspdf.jsPDF) -->
 <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
 
 <script>
 /* =========================
    Stockage
-   - State (sans images) : localStorage
-   - Photos : IndexedDB (stable)
+   - Fiches (state) : localStorage (plusieurs fiches)
+   - Photos : IndexedDB
 ========================= */
 
-const LS_KEY = "reception_lampadaire_state_v3"; // nouvelle clé (évite l’ancien stockage plein)
+const LS_KEY_FALLBACK = "reception_lampadaire_state_fallback_v1"; // ancien fallback
+const FICHES_INDEX_KEY = "FL_FICHES_INDEX_V1";
+const CURRENT_FICHE_KEY = "FL_CURRENT_FICHE_ID_V1";
+
 const DB_NAME = "reception_lampadaire_photos_v1";
 const DB_STORE = "photos";
 
 const byId = (id) => document.getElementById(id);
+const ficheStorageKey = (id) => `FL_FICHE_${id}`;
+
+const newId = (prefix="id") =>
+  `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2,8)}`;
 
 const todayISO = () => {
   const d = new Date();
@@ -233,6 +257,14 @@ function escapeHtml(str){
     .replaceAll('"',"&quot;")
     .replaceAll("'","&#039;");
 }
+
+const makeFicheLabel = (st) => {
+  const proj = (st?.chantier?.projet || "").trim();
+  const com = (st?.chantier?.commune || "").trim();
+  const d = (st?.chantier?.date || "").trim();
+  const base = [proj, com, d].filter(Boolean).join(" — ");
+  return base || "Fiche sans nom";
+};
 
 /* ===== IndexedDB helpers ===== */
 const openDB = () => new Promise((resolve, reject) => {
@@ -279,16 +311,6 @@ const idbDelete = async (id) => {
   });
 };
 
-const idbClearAll = async () => {
-  const db = await openDB();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(DB_STORE, "readwrite");
-    tx.objectStore(DB_STORE).clear();
-    tx.oncomplete = () => { db.close(); resolve(true); };
-    tx.onerror = () => { db.close(); reject(tx.error); };
-  });
-};
-
 /* ===== Images: compression + resize ===== */
 const compressImageToDataUrl = (file, opts = {}) => new Promise((resolve, reject) => {
   const { maxW = 1280, maxH = 1280, quality = 0.75, mime = "image/jpeg" } = opts;
@@ -315,7 +337,6 @@ const compressImageToDataUrl = (file, opts = {}) => new Promise((resolve, reject
   img.src = url;
 });
 
-/* ===== Wait images for PDF ===== */
 const waitForImages = (root) => {
   const imgs = Array.from(root.querySelectorAll("img"));
   return Promise.all(imgs.map(img => {
@@ -327,11 +348,31 @@ const waitForImages = (root) => {
   }));
 };
 
+/* ===== Logo -> dataURL (fiable iPad PDF) ===== */
+let LOGO_DATAURL_CACHE = "";
+const getLogoDataUrl = async () => {
+  if (LOGO_DATAURL_CACHE) return LOGO_DATAURL_CACHE;
+  try {
+    const res = await fetch("logo.png", { cache: "no-store" });
+    const blob = await res.blob();
+    const dataUrl = await new Promise((resolve, reject) => {
+      const r = new FileReader();
+      r.onload = () => resolve(r.result);
+      r.onerror = reject;
+      r.readAsDataURL(blob);
+    });
+    LOGO_DATAURL_CACHE = dataUrl;
+    return dataUrl;
+  } catch {
+    return "logo.png";
+  }
+};
+
 /* =========================
-   State (sans statut)
+   State
 ========================= */
 const defaultPoint = () => ({
-  id: "id-" + Date.now().toString(36) + "-" + Math.random().toString(36).substring(2, 8),
+  id: newId("pt"),
   numero: "",
   repere: "",
   lat: "",
@@ -340,16 +381,18 @@ const defaultPoint = () => ({
   date_reprise: "",
 });
 
-let state = {
+const emptyState = () => ({
   chantier: {
     projet: "", commune: "", zone: "", date: todayISO(),
-    poseur: "", poseurAutre: "", chef: "",
+    poseur: "", poseurAutre: "",
+    chef: "",
     controleur: "", controleurAutre: "",
-    nbTotalPoints: 0,
     signatures: { controleur:"", entreprise:"", client:"" }
   },
   points: [ defaultPoint() ]
-};
+});
+
+let state = emptyState();
 
 const ensureSignatures = () => {
   state.chantier.signatures ||= { controleur:"", entreprise:"", client:"" };
@@ -358,29 +401,163 @@ const ensureSignatures = () => {
   state.chantier.signatures.client ||= "";
 };
 
+/* =========================
+   Fiches (multi)
+========================= */
+const loadFichesIndex = () => {
+  try { return JSON.parse(localStorage.getItem(FICHES_INDEX_KEY) || "[]"); }
+  catch { return []; }
+};
+const saveFichesIndex = (arr) => localStorage.setItem(FICHES_INDEX_KEY, JSON.stringify(arr));
+const getCurrentFicheId = () => localStorage.getItem(CURRENT_FICHE_KEY) || "";
+const setCurrentFicheId = (id) => localStorage.setItem(CURRENT_FICHE_KEY, id);
+
+const ensureAtLeastOneFiche = () => {
+  let index = loadFichesIndex();
+
+  if (!index.length) {
+    const id = newId("fiche");
+    index = [{ id, name: makeFicheLabel(state), updatedAt: Date.now() }];
+    saveFichesIndex(index);
+    setCurrentFicheId(id);
+    localStorage.setItem(ficheStorageKey(id), JSON.stringify(state));
+  }
+
+  if (!getCurrentFicheId()) setCurrentFicheId(index[0].id);
+};
+
+const refreshFicheSelect = () => {
+  const sel = byId("ficheSelect");
+  const index = loadFichesIndex().sort((a,b)=> (b.updatedAt||0)-(a.updatedAt||0));
+  const cur = getCurrentFicheId();
+
+  sel.innerHTML = index
+    .map(f => `<option value="${f.id}">${escapeHtml(f.name || "Fiche")}</option>`)
+    .join("");
+
+  sel.value = cur || (index[0]?.id || "");
+};
+
+const loadFiche = async (id) => {
+  const raw = localStorage.getItem(ficheStorageKey(id));
+  if (!raw) return false;
+  try {
+    const parsed = JSON.parse(raw);
+    if (parsed && parsed.chantier && Array.isArray(parsed.points)) {
+      state = parsed;
+      ensureSignatures();
+      setCurrentFicheId(id);
+      await render();
+      initSignatures(true);
+      return true;
+    }
+  } catch {}
+  return false;
+};
+
+const saveCurrentFiche = () => {
+  const id = getCurrentFicheId();
+  if (!id) return;
+
+  localStorage.setItem(ficheStorageKey(id), JSON.stringify(state));
+
+  const index = loadFichesIndex();
+  const name = makeFicheLabel(state);
+
+  const next = index.map(f => f.id === id ? { ...f, name, updatedAt: Date.now() } : f);
+  saveFichesIndex(next);
+  refreshFicheSelect();
+};
+
+/* ===== Save / Load fallback ===== */
 const saveState = () => {
   try {
-    localStorage.setItem(LS_KEY, JSON.stringify(state));
+    localStorage.setItem(LS_KEY_FALLBACK, JSON.stringify(state)); // fallback
+    saveCurrentFiche();
     return true;
   } catch (e) {
-    alert("⚠️ Impossible de sauvegarder les données (storage). Détail : " + (e?.message || e));
+    alert("⚠️ Impossible de sauvegarder. Détail : " + (e?.message || e));
     return false;
   }
 };
 
 const loadState = () => {
-  const raw = localStorage.getItem(LS_KEY);
-  if (!raw) return;
-  try {
-    const parsed = JSON.parse(raw);
-    if (parsed && parsed.chantier && Array.isArray(parsed.points)) state = parsed;
-  } catch(e) {}
+  // 1) fiche courante
+  const cur = getCurrentFicheId();
+  if (cur) {
+    const raw = localStorage.getItem(ficheStorageKey(cur));
+    if (raw) {
+      try {
+        const parsed = JSON.parse(raw);
+        if (parsed && parsed.chantier && Array.isArray(parsed.points)) {
+          state = parsed;
+          return;
+        }
+      } catch {}
+    }
+  }
+
+  // 2) fallback
+  const rawOld = localStorage.getItem(LS_KEY_FALLBACK);
+  if (rawOld) {
+    try {
+      const parsed = JSON.parse(rawOld);
+      if (parsed && parsed.chantier && Array.isArray(parsed.points)) state = parsed;
+    } catch {}
+  }
+};
+
+const duplicateFicheWithPhotos = async () => {
+  const index = loadFichesIndex();
+  const srcId = getCurrentFicheId();
+  if (!srcId) return;
+
+  const srcState = JSON.parse(JSON.stringify(state));
+  const newFicheId = newId("fiche");
+  const mapping = new Map();
+
+  const newPoints = (srcState.points || []).map(pt => {
+    const newPointId = newId("pt");
+    mapping.set(pt.id, newPointId);
+    return { ...pt, id: newPointId };
+  });
+
+  const newState = {
+    ...srcState,
+    chantier: { ...srcState.chantier },
+    points: newPoints
+  };
+
+  // dupliquer photos
+  for (const [oldPid, newPid] of mapping.entries()) {
+    const oldPhotos = await idbGetManyByPoint(oldPid);
+    for (const ph of oldPhotos) {
+      await idbPut({
+        id: newId("ph"),
+        pointId: newPid,
+        dataUrl: ph.dataUrl,
+        createdAt: Date.now()
+      });
+    }
+  }
+
+  localStorage.setItem(ficheStorageKey(newFicheId), JSON.stringify(newState));
+
+  const name = makeFicheLabel(newState) + " (copie)";
+  const nextIndex = [...index, { id: newFicheId, name, updatedAt: Date.now() }];
+  saveFichesIndex(nextIndex);
+
+  setCurrentFicheId(newFicheId);
+  state = newState;
+  ensureSignatures();
+  await render();
+  initSignatures(true);
+  refreshFicheSelect();
 };
 
 /* =========================
    Render
 ========================= */
-
 const renderPoint = (p, idx, photos) => {
   const numeroStyle = String(p.numero || "").trim() ? "" : "border:2px solid #ef4444;";
 
@@ -454,18 +631,20 @@ const render = async () => {
   byId("commune").value = state.chantier.commune || "";
   byId("zone").value = state.chantier.zone || "";
   byId("date").value = state.chantier.date || todayISO();
+
   byId("poseur").value = state.chantier.poseur || "";
   byId("poseurAutre").value = state.chantier.poseurAutre || "";
   byId("poseurAutreWrap").style.display =
-  (state.chantier.poseur === "__autre__") ? "block" : "none";
+    (state.chantier.poseur === "__autre__") ? "block" : "none";
+
   byId("chef").value = state.chantier.chef || "";
+
   byId("controleur").value = state.chantier.controleur || "";
   byId("controleurAutre").value = state.chantier.controleurAutre || "";
-  
   byId("controleurAutreWrap").style.display =
     (state.chantier.controleur === "__autre__") ? "block" : "none";
 
-  // charge photos par point (IndexedDB)
+  // charge photos par point
   const chunks = [];
   for (let i=0; i<state.points.length; i++){
     const p = state.points[i];
@@ -475,9 +654,8 @@ const render = async () => {
   byId("pointsWrap").innerHTML = chunks.join("");
 
   byId("syntheseText").innerHTML = `
-  <div>Points non conformes : <strong>${state.points.length}</strong></div>
-`;
-
+    <div>Points non conformes : <strong>${state.points.length}</strong></div>
+  `;
 };
 
 /* =========================
@@ -495,9 +673,7 @@ const bindChantier = () => {
     if (!el) return;
 
     const apply = async () => {
-      let v = el.value;
-      if (key === "nbTotalPoints") v = Number(v || 0);
-      state.chantier[key] = v;
+      state.chantier[key] = el.value;
       saveState();
       await render();
     };
@@ -506,6 +682,7 @@ const bindChantier = () => {
     el.addEventListener("change", apply);
   });
 
+  // Controleur - autre
   const ctrlSelect = byId("controleur");
   const ctrlOtherWrap = byId("controleurAutreWrap");
   const ctrlOtherInput = byId("controleurAutre");
@@ -526,26 +703,26 @@ const bindChantier = () => {
     saveState();
   });
 
+  // Poseur - autre
   const poseurSelect = byId("poseur");
   const poseurOtherWrap = byId("poseurAutreWrap");
   const poseurOtherInput = byId("poseurAutre");
 
   poseurSelect.addEventListener("change", async () => {
-  const isOther = poseurSelect.value === "__autre__";
-  poseurOtherWrap.style.display = isOther ? "block" : "none";
-  if (!isOther) {
-    state.chantier.poseurAutre = "";
-    poseurOtherInput.value = "";
+    const isOther = poseurSelect.value === "__autre__";
+    poseurOtherWrap.style.display = isOther ? "block" : "none";
+    if (!isOther) {
+      state.chantier.poseurAutre = "";
+      poseurOtherInput.value = "";
+      saveState();
+      await render();
+    }
+  });
+
+  poseurOtherInput.addEventListener("input", () => {
+    state.chantier.poseurAutre = poseurOtherInput.value;
     saveState();
-    await render();
-  }
-});
-
-poseurOtherInput.addEventListener("input", () => {
-  state.chantier.poseurAutre = poseurOtherInput.value;
-  saveState();
-});
-
+  });
 };
 
 /* =========================
@@ -582,9 +759,8 @@ const handlePointsEvents = () => {
       if (!files.length) return;
 
       const MAX_PHOTOS_PER_POINT = 12;
-
-      // compte existant
       const existing = await idbGetManyByPoint(pid);
+
       if (existing.length >= MAX_PHOTOS_PER_POINT) {
         alert("Limite atteinte : " + MAX_PHOTOS_PER_POINT + " photos max pour ce point.");
         e.target.value = "";
@@ -595,18 +771,9 @@ const handlePointsEvents = () => {
 
       for (const f of files) {
         if (remaining <= 0) break;
-
         try {
           const dataUrl = await compressImageToDataUrl(f, { maxW: 1280, maxH: 1280, quality: 0.75 });
-          const photoId = "ph-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2,7);
-
-          await idbPut({
-            id: photoId,
-            pointId: pid,
-            dataUrl,
-            createdAt: Date.now()
-          });
-
+          await idbPut({ id: newId("ph"), pointId: pid, dataUrl, createdAt: Date.now() });
           remaining--;
         } catch (err) {
           alert("Impossible d'ajouter une photo : " + (err?.message || err));
@@ -615,6 +782,7 @@ const handlePointsEvents = () => {
 
       e.target.value = ""; // important iOS
       await render();
+      saveState();
     }
   });
 
@@ -656,7 +824,6 @@ const handlePointsEvents = () => {
         return;
       }
 
-      // supprime photos du point
       const photos = await idbGetManyByPoint(pid);
       for (const ph of photos) await idbDelete(ph.id);
 
@@ -671,6 +838,7 @@ const handlePointsEvents = () => {
       if (!photoId) return;
       await idbDelete(photoId);
       await render();
+      saveState();
       return;
     }
   });
@@ -679,15 +847,17 @@ const handlePointsEvents = () => {
 /* =========================
    Signatures
 ========================= */
+let sigCleanup = []; // pour éviter accumulation listeners
+
 const setupSignaturePad = (canvasId, clearBtnId, key) => {
   const canvas = byId(canvasId);
   const clearBtn = byId(clearBtnId);
-
   const ctx = canvas.getContext("2d");
   ctx.lineWidth = 2;
   ctx.lineCap = "round";
   ctx.lineJoin = "round";
 
+  // restore image
   const existing = state.chantier.signatures?.[key];
   if (existing) {
     const img = new Image();
@@ -696,6 +866,8 @@ const setupSignaturePad = (canvasId, clearBtnId, key) => {
       ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
     };
     img.src = existing;
+  } else {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
   }
 
   let drawing = false;
@@ -734,9 +906,11 @@ const setupSignaturePad = (canvasId, clearBtnId, key) => {
     saveState();
   };
 
+  const onMouseUp = (ev) => end(ev);
+
   canvas.addEventListener("mousedown", start);
   canvas.addEventListener("mousemove", move);
-  window.addEventListener("mouseup", end);
+  window.addEventListener("mouseup", onMouseUp);
 
   canvas.addEventListener("touchstart", start, { passive:false });
   canvas.addEventListener("touchmove", move, { passive:false });
@@ -747,20 +921,33 @@ const setupSignaturePad = (canvasId, clearBtnId, key) => {
     state.chantier.signatures[key] = "";
     saveState();
   });
+
+  // cleanup handlers
+  sigCleanup.push(() => {
+    canvas.removeEventListener("mousedown", start);
+    canvas.removeEventListener("mousemove", move);
+    window.removeEventListener("mouseup", onMouseUp);
+    canvas.removeEventListener("touchstart", start);
+    canvas.removeEventListener("touchmove", move);
+    canvas.removeEventListener("touchend", end);
+  });
 };
 
-const initSignatures = () => {
+const initSignatures = (force=false) => {
   ensureSignatures();
+  if (force) {
+    sigCleanup.forEach(fn => { try { fn(); } catch {} });
+    sigCleanup = [];
+  }
   setupSignaturePad("sigControleur", "clearSigControleur", "controleur");
   setupSignaturePad("sigEntreprise", "clearSigEntreprise", "entreprise");
   setupSignaturePad("sigClient", "clearSigClient", "client");
 };
 
 /* =========================
-   PDF (sans Statut)
+   PDF
 ========================= */
 const buildPdfBody = async () => {
-
   const sigs = state.chantier.signatures || {};
 
   const controleurNom =
@@ -773,16 +960,10 @@ const buildPdfBody = async () => {
       ? (state.chantier.poseurAutre || "")
       : (state.chantier.poseur || "");
 
-  // Logo (cache-buster iOS)
-  const logoSrc =
-    (typeof LOGO_BASE64 !== "undefined" && String(LOGO_BASE64).startsWith("data:"))
-      ? LOGO_BASE64
-      : ("logo.png?v=" + Date.now());
+  const logoSrc = await getLogoDataUrl();
 
-  // prépare lignes avec photos (IDB)
   const rows = [];
   for (let i = 0; i < state.points.length; i++) {
-
     const p = state.points[i];
     const photos = await idbGetManyByPoint(p.id);
     const first3 = photos.slice(0, 3);
@@ -790,9 +971,7 @@ const buildPdfBody = async () => {
     rows.push(`
       <tr style="page-break-inside:avoid;">
         <td style="border:1px solid #ddd;padding:8px;vertical-align:top;">${i + 1}</td>
-        <td style="border:1px solid #ddd;padding:8px;vertical-align:top;">
-          <strong>${escapeHtml(p.numero)}</strong>
-        </td>
+        <td style="border:1px solid #ddd;padding:8px;vertical-align:top;"><strong>${escapeHtml(p.numero)}</strong></td>
         <td style="border:1px solid #ddd;padding:8px;vertical-align:top;background:#fee2e2;color:#991b1b;font-weight:700;">
           ${escapeHtml(p.reserves_txt || "—")}
         </td>
@@ -802,40 +981,36 @@ const buildPdfBody = async () => {
               <img src="${ph.dataUrl}" alt="Photo"
                 style="height:85px;width:auto;object-fit:cover;border:1px solid #ddd;border-radius:6px;">
             `).join("")}
-            ${(photos.length > 3)
-              ? `<div style="font-size:11px;color:#555;align-self:center;">
-                  +${photos.length - 3}
-                </div>`
-              : ""}
+            ${(photos.length > 3) ? `<div style="font-size:11px;color:#555;align-self:center;">+${photos.length - 3}</div>` : ""}
           </div>
         </td>
         <td style="border:1px solid #ddd;padding:8px;vertical-align:top;">
           ${escapeHtml(p.repere || "")}<br>
           <span style="font-size:11px;color:#555;">
-            ${escapeHtml(p.lat || "")}
-            ${(p.lat && p.lon) ? " • " : ""}
-            ${escapeHtml(p.lon || "")}
+            ${escapeHtml(p.lat || "")} ${(p.lat && p.lon) ? " • " : ""} ${escapeHtml(p.lon || "")}
           </span>
         </td>
-        <td style="border:1px solid #ddd;padding:8px;vertical-align:top;white-space:nowrap;">
-          ${escapeHtml(p.date_reprise || "")}
-        </td>
+        <td style="border:1px solid #ddd;padding:8px;vertical-align:top;white-space:nowrap;">${escapeHtml(p.date_reprise || "")}</td>
       </tr>
     `);
   }
 
+  const signatureBox = (imgDataUrl) => {
+    if (imgDataUrl) {
+      return `<img src="${imgDataUrl}" style="width:100%;max-height:140px;object-fit:contain;border:1px solid #ddd;border-radius:8px;">`;
+    }
+    return `
+      <div style="width:100%;height:120px;border:2px solid #111;border-radius:8px;"></div>
+      <div style="font-size:11px;color:#555;margin-top:6px;text-align:center;">Nom / Date / Signature</div>
+    `;
+  };
+
   return `
     <div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;line-height:1.35;">
-
       <div style="display:flex;gap:14px;align-items:center;border-bottom:2px solid #111827;padding-bottom:10px;margin-bottom:16px;">
-        <img src="${logoSrc}" alt="Logo" crossorigin="anonymous"
-          style="height:121px;width:auto;object-fit:contain;">
-
+        <img src="${logoSrc}" alt="Logo" style="height:80px;width:auto;object-fit:contain;">
         <div>
-          <div style="font-size:18px;font-weight:700;margin:0;">
-            PV – Points non conformes (Réserves)
-          </div>
-
+          <div style="font-size:18px;font-weight:700;margin:0;">PV – Points non conformes (Réserves)</div>
           <div style="font-size:12px;color:#555;margin-top:4px;">
             Commune : <strong>${escapeHtml(state.chantier.commune)}</strong> |
             Date : <strong>${escapeHtml(state.chantier.date)}</strong><br>
@@ -852,60 +1027,151 @@ const buildPdfBody = async () => {
             <th style="border:1px solid #ddd;padding:8px;background:#f3f4f6;text-align:left;width:4%;">#</th>
             <th style="border:1px solid #ddd;padding:8px;background:#f3f4f6;text-align:left;width:10%;">Nb point</th>
             <th style="border:1px solid #ddd;padding:8px;background:#f3f4f6;text-align:left;width:40%;">Non-conformité / Observation</th>
-            <th style="border:1px solid #ddd;padding:8px;background:#f3f4f6;text-align:left;width:14%;">Photos</th>
+            <th style="border:1px solid #ddd;padding:8px;background:#f3f4f6;text-align:left;width:16%;">Photos</th>
             <th style="border:1px solid #ddd;padding:8px;background:#f3f4f6;text-align:left;width:18%;">Localisation</th>
-            <th style="border:1px solid #ddd;padding:8px;background:#f3f4f6;text-align:left;width:16%;">Date de reprise</th>
+            <th style="border:1px solid #ddd;padding:8px;background:#f3f4f6;text-align:left;width:12%;">Date de reprise</th>
           </tr>
         </thead>
-
         <tbody>
           ${rows.join("")}
         </tbody>
       </table>
 
       <h2 style="margin-top:16px;">Signatures</h2>
-
       <table style="width:100%;border-collapse:collapse;">
         <tr>
-
           <td style="width:33%;padding:8px;border:1px solid #ddd;">
             <strong>Contrôleur</strong><br>
-            ${sigs.controleur
-              ? `<img src="${sigs.controleur}" style="width:100%;max-height:140px;object-fit:contain;border:1px solid #ddd;border-radius:8px;">`
-              : `<div style="width:100%;height:120px;border:2px solid #111;border-radius:8px;"></div>
-                 <div style="font-size:11px;color:#555;margin-top:6px;text-align:center;">
-                   Nom / Date / Signature
-                 </div>`
-            }
+            ${signatureBox(sigs.controleur)}
           </td>
-
           <td style="width:33%;padding:8px;border:1px solid #ddd;">
             <strong>Entreprise</strong><br>
-            ${sigs.entreprise
-              ? `<img src="${sigs.entreprise}" style="width:100%;max-height:140px;object-fit:contain;border:1px solid #ddd;border-radius:8px;">`
-              : `<div style="width:100%;height:120px;border:2px solid #111;border-radius:8px;"></div>
-                 <div style="font-size:11px;color:#555;margin-top:6px;text-align:center;">
-                   Nom / Date / Signature
-                 </div>`
-            }
+            ${signatureBox(sigs.entreprise)}
           </td>
-
           <td style="width:33%;padding:8px;border:1px solid #ddd;">
             <strong>Client</strong><br>
-            ${sigs.client
-              ? `<img src="${sigs.client}" style="width:100%;max-height:140px;object-fit:contain;border:1px solid #ddd;border-radius:8px;">`
-              : `<div style="width:100%;height:120px;border:2px solid #111;border-radius:8px;"></div>
-                 <div style="font-size:11px;color:#555;margin-top:6px;text-align:center;">
-                   Nom / Date / Signature
-                 </div>`
-            }
+            ${signatureBox(sigs.client)}
           </td>
-
         </tr>
       </table>
-
     </div>
   `;
+};
+
+const exportPDF = async () => {
+  let container = null;
+  let previewWin = null;
+
+  try {
+    // ouvrir tout de suite (sinon pop-up bloquée sur iPad)
+    previewWin = window.open("", "_blank");
+    if (!previewWin) {
+      alert("Pop-up bloquée. Autorise les pop-ups (Safari).");
+      return;
+    }
+    previewWin.document.write("<p style='font-family:system-ui'>Génération du PDF…</p>");
+
+    // validation minimum
+    const missing = state.points
+      .map((p, i) => (!String(p.numero || "").trim() ? `Point ${i+1}` : null))
+      .filter(Boolean);
+    if (missing.length) {
+      alert("Numéro obligatoire manquant pour : " + missing.join(", "));
+      previewWin.close();
+      return;
+    }
+
+    byId("pdfLoading").style.display = "flex";
+
+    // container rendu
+    container = document.createElement("div");
+    container.style.position = "fixed";
+    container.style.left = "0";
+    container.style.top = "0";
+    container.style.width = "794px"; // A4 @96dpi env.
+    container.style.background = "#fff";
+    container.style.visibility = "hidden"; // iPad: invisible mais rendu OK
+    container.style.pointerEvents = "none";
+    container.style.zIndex = "9999";
+
+    container.innerHTML = await buildPdfBody();
+    document.body.appendChild(container);
+
+    // attendre paint + fonts + images
+    await new Promise(r => requestAnimationFrame(r));
+    await new Promise(r => requestAnimationFrame(r));
+    if (document.fonts && document.fonts.ready) {
+      try { await document.fonts.ready; } catch(e) {}
+    }
+    await waitForImages(container);
+    await new Promise(r => setTimeout(r, 150));
+
+    const canvas = await html2canvas(container, {
+      scale: 1.6,
+      useCORS: true,
+      allowTaint: false,
+      backgroundColor: "#ffffff",
+      logging: false,
+      imageTimeout: 20000
+    });
+
+    const { jsPDF } = window.jspdf;
+    const pdf = new jsPDF({ unit: "mm", format: "a4", orientation: "portrait" });
+
+    const pdfW = pdf.internal.pageSize.getWidth();
+    const pdfH = pdf.internal.pageSize.getHeight();
+    const M = 8;
+    const usableW = pdfW - 2 * M;
+    const usableH = pdfH - 2 * M;
+
+    const imgW = usableW;
+    const imgH = canvas.height * (imgW / canvas.width);
+
+    if (imgH <= usableH) {
+      const imgData = canvas.toDataURL("image/jpeg", 0.95);
+      pdf.addImage(imgData, "JPEG", M, M, imgW, imgH);
+    } else {
+      const pageCanvas = document.createElement("canvas");
+      const pageCtx = pageCanvas.getContext("2d");
+
+      const pageHpx = Math.floor(canvas.width * (usableH / usableW));
+      let y = 0;
+      let first = true;
+
+      while (y < canvas.height) {
+        const sliceH = Math.min(pageHpx, canvas.height - y);
+
+        pageCanvas.width = canvas.width;
+        pageCanvas.height = sliceH;
+
+        pageCtx.clearRect(0, 0, pageCanvas.width, pageCanvas.height);
+        pageCtx.drawImage(canvas, 0, y, canvas.width, sliceH, 0, 0, pageCanvas.width, sliceH);
+
+        const pageImg = pageCanvas.toDataURL("image/jpeg", 0.95);
+        const pageImgH_mm = (sliceH * imgW) / canvas.width;
+
+        if (!first) pdf.addPage();
+        first = false;
+
+        pdf.addImage(pageImg, "JPEG", M, M, imgW, pageImgH_mm);
+        y += sliceH;
+      }
+    }
+
+    byId("pdfLoading").style.display = "none";
+
+    const blob = pdf.output("blob");
+    const url = URL.createObjectURL(blob);
+    previewWin.location.href = url;
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+
+  } catch (e) {
+    byId("pdfLoading").style.display = "none";
+    alert("Erreur PDF : " + (e?.message || e));
+    if (previewWin && !previewWin.closed) previewWin.close();
+  } finally {
+    if (container) container.remove();
+  }
 };
 
 /* =========================
@@ -921,34 +1187,97 @@ const bindButtons = () => {
 
   byId("pdfBtn").addEventListener("click", exportPDF);
 
+  // vider la fiche courante (sans toucher les autres fiches)
   byId("resetBtn").addEventListener("click", async () => {
-    if (!confirm("Tout effacer ? (Données + photos locales seront supprimées)")) return;
+    if (!confirm("Vider la fiche courante ? (points + photos + signatures)")) return;
 
-    localStorage.removeItem(LS_KEY);
-    await idbClearAll();
+    // supprimer photos des points
+    for (const pt of (state.points || [])) {
+      const photos = await idbGetManyByPoint(pt.id);
+      for (const ph of photos) await idbDelete(ph.id);
+    }
 
-    state = {
-      chantier: {
-        projet: "", commune: "", zone: "", date: todayISO(),
-        poseur: "", PoseurAutre: "",
-        chef:"",
-        controleur: "", controleurAutre: "",
-        signatures: { controleur:"", entreprise:"", client:"" }
-      },
-      points: [ defaultPoint() ]
-    };
+    // reset state
+    state = emptyState();
 
     saveState();
     await render();
+    initSignatures(true);
+  });
+};
 
-    // reset listeners signatures proprement
-    ["sigControleur","sigEntreprise","sigClient"].forEach(id => {
-      const oldC = byId(id);
-      const newC = oldC.cloneNode(true);
-      oldC.parentNode.replaceChild(newC, oldC);
-    });
+/* =========================
+   UI Fiches
+========================= */
+const bindFichesUI = () => {
+  const sel = byId("ficheSelect");
 
-    initSignatures();
+  sel.addEventListener("change", async () => {
+    const id = sel.value;
+    if (!id) return;
+    await loadFiche(id);
+    refreshFicheSelect();
+  });
+
+  byId("saveFicheBtn").addEventListener("click", async () => {
+    saveState();
+    refreshFicheSelect();
+    alert("✅ Fiche sauvegardée");
+  });
+
+  byId("newFicheBtn").addEventListener("click", async () => {
+    const id = newId("fiche");
+    state = emptyState();
+    localStorage.setItem(ficheStorageKey(id), JSON.stringify(state));
+
+    const index = loadFichesIndex();
+    index.push({ id, name: "Nouvelle fiche", updatedAt: Date.now() });
+    saveFichesIndex(index);
+
+    setCurrentFicheId(id);
+    ensureSignatures();
+    await render();
+    initSignatures(true);
+    refreshFicheSelect();
+  });
+
+  byId("dupFicheBtn").addEventListener("click", async () => {
+    await duplicateFicheWithPhotos();
+    alert("✅ Fiche dupliquée (photos incluses)");
+  });
+
+  byId("delFicheBtn").addEventListener("click", async () => {
+    const id = getCurrentFicheId();
+    if (!id) return;
+
+    if (!confirm("Supprimer cette fiche ? (photos incluses)")) return;
+
+    // supprimer photos de cette fiche
+    try {
+      const raw = localStorage.getItem(ficheStorageKey(id));
+      if (raw) {
+        const st = JSON.parse(raw);
+        for (const pt of (st?.points || [])) {
+          const photos = await idbGetManyByPoint(pt.id);
+          for (const ph of photos) await idbDelete(ph.id);
+        }
+      }
+    } catch {}
+
+    localStorage.removeItem(ficheStorageKey(id));
+    let index = loadFichesIndex().filter(f => f.id !== id);
+    saveFichesIndex(index);
+
+    if (!index.length) {
+      state = emptyState();
+      ensureAtLeastOneFiche();
+    } else {
+      setCurrentFicheId(index[0].id);
+      await loadFiche(index[0].id);
+    }
+
+    refreshFicheSelect();
+    alert("🗑️ Fiche supprimée");
   });
 };
 
@@ -957,16 +1286,18 @@ const bindButtons = () => {
 ========================= */
 (async () => {
   loadState();
-  if (!state.chantier.date) state.chantier.date = todayISO();
-  if (!state.points.length) state.points = [ defaultPoint() ];
+  ensureAtLeastOneFiche();
   ensureSignatures();
 
   bindChantier();
   handlePointsEvents();
   bindButtons();
+  bindFichesUI();
+
+  refreshFicheSelect();
   await render();
   saveState();
-  initSignatures();
+  initSignatures(true);
 })();
 </script>
 </body>
