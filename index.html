@@ -12,7 +12,8 @@
     main { padding: 16px; max-width: 980px; margin: 0 auto; }
 
     .card { background: white; border-radius: 12px; padding: 24px; margin-bottom: 12px; box-shadow: 0 2px 10px rgba(0,0,0,.06); }
-    .card.linked { margin-left: 30px; border-left: 5px solid #2563eb; background: #f9fafb; }
+    /* Style pour les points liés (1.1, 1.2...) */
+    .card.linked-point { margin-left: 35px; border-left: 6px solid #2563eb; background: #fbfcfe; }
     
     .row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
     @media (max-width: 720px){ .row { grid-template-columns: 1fr; } }
@@ -25,27 +26,28 @@
     textarea { min-height: 70px; resize: vertical; }
 
     .btnrow { display:flex; gap:10px; flex-wrap: wrap; align-items:center; }
-    .btn { cursor:pointer; border: 0; background:#111827; color:white; padding:10px 12px; border-radius:10px; width:auto; }
+    .btn { cursor:pointer; border: 0; background:#111827; color:white; padding:10px 12px; border-radius:10px; width:auto; font-weight: 600;}
     .btn.secondary { background:#374151; }
     .btn.danger { background:#b91c1c; }
+    .btn.blue { background:#2563eb; }
 
-    .pill { display:inline-block; padding:4px 10px; border-radius:999px; font-size:12px; }
+    .pill { display:inline-block; padding:4px 10px; border-radius:999px; font-size:12px; font-weight: bold;}
     .bad { background:#fee2e2; color:#991b1b; }
 
     .point-head { display:flex; align-items:flex-start; justify-content:space-between; gap:10px; flex-wrap: wrap; }
     .small { font-size:12px; color:#6b7280; }
 
     .photos { display:flex; gap:10px; flex-wrap:wrap; margin-top:8px; }
-    .thumb { width:110px; border:1px solid #e5e7eb; border-radius:10px; overflow:hidden; background:#fff; position: relative;}
-    .thumb img { display:block; width:100%; height:80px; object-fit:cover; }
+    .thumb { width: 120px; border:1px solid #e5e7eb; border-radius:10px; overflow:hidden; background:#fff; position: relative; }
+    .thumb img { display:block; width:100%; height:90px; object-fit:cover; }
 
     #pdfLoading {
       position: fixed; inset: 0; background: rgba(17,24,39,.9); color: white;
       display: none; flex-direction: column; align-items: center; justify-content: center; z-index: 9999;
     }
     .spinner {
-      width: 40px; height: 40px; border: 4px solid #fff; border-top-color: transparent;
-      border-radius: 50%; animation: spin 1s linear infinite; margin-bottom: 10px;
+      width: 42px; height: 42px; border: 4px solid rgba(255,255,255,.3);
+      border-top-color: #fff; border-radius: 50%; animation: spin 1s linear infinite; margin-bottom: 12px;
     }
     @keyframes spin { to { transform: rotate(360deg); } }
   </style>
@@ -57,18 +59,18 @@
     <img src="logo.png" alt="Logo" style="height:48px; object-fit:contain;" />
     <div>
       <div style="font-weight:700;">Réception de chantier</div>
-      <div class="small">V3 - Points hiérarchisés</div>
+      <div class="small">PV des points non conformes - V3 Hiérarchisée</div>
     </div>
   </div>
 </header>
 
 <main>
-  <section class="card" id="chantierCard">
+  <section class="card">
     <h3 style="margin:0 0 10px 0;">1) Infos chantier</h3>
     <div class="row">
       <div><label>Projet / Affaire</label><input id="projet" placeholder="Ex: EP - Commune X" /></div>
       <div><label>Commune</label><input id="commune" placeholder="Ex: Nérac" /></div>
-      <div><label>Adresse / Zone</label><input id="zone" placeholder="Rue..." /></div>
+      <div><label>Adresse / Zone</label><input id="zone" placeholder="Quartier..." /></div>
       <div><label>Date</label><input id="date" type="date" /></div>
       <div>
         <label>Poseur</label>
@@ -81,7 +83,7 @@
           <option value="__autre__">Autre…</option>
         </select>
       </div>
-      <div id="poseurAutreWrap" style="display:none;"><label>Nom poseur</label><input id="poseurAutre" /></div>
+      <div id="poseurAutreWrap" style="display:none;"><label>Nom du poseur</label><input id="poseurAutre" /></div>
       <div><label>Chef d’équipe</label><input id="chef" /></div>
       <div>
         <label>Contrôleur</label>
@@ -94,10 +96,11 @@
           <option value="__autre__">Autre…</option>
         </select>
       </div>
+      <div id="controleurAutreWrap" style="display:none;"><label>Nom du contrôleur</label><input id="controleurAutre" /></div>
     </div>
 
-    <div class="row" style="margin-top:12px; border-top:1px solid #eee; padding-top:12px;">
-      <div><label>📂 Mes fiches</label><select id="ficheSelect"></select></div>
+    <div class="row" style="margin-top:20px; border-top:1px solid #eee; padding-top:15px;">
+      <div><label>📂 Mes fiches enregistrées</label><select id="ficheSelect"></select></div>
       <div class="btnrow" style="align-self: flex-end;">
         <button class="btn secondary" id="newFicheBtn">➕ Nouvelle</button>
         <button class="btn" id="saveFicheBtn">💾 Sauver</button>
@@ -107,10 +110,10 @@
     </div>
 
     <div class="btnrow" style="margin-top:20px; border-top: 1px solid #eee; padding-top: 20px;">
-      <button class="btn" id="addPointBtn" style="background:#111827;">➕ Ajouter réserve principale</button>
-      <button class="btn secondary" id="pdfBtn">🧾 PDF</button>
-      <button class="btn" id="sharePdfBtn" style="background:#2563eb;">📤 Partager</button>
-      <button class="btn danger" id="resetBtn">🧽 Vider fiche</button>
+      <button class="btn" id="addPointBtn" style="background:#111827;">➕ Nouvelle réserve (1, 2...)</button>
+      <button class="btn secondary" id="pdfBtn">🧾 Exporter PDF</button>
+      <button class="btn blue" id="sharePdfBtn">📤 Partager (Mail/WhatsApp)</button>
+      <button class="btn danger" id="resetBtn">🧽 Vider la fiche</button>
     </div>
   </section>
 
@@ -118,7 +121,7 @@
 
   <section class="card">
     <h3 style="margin:0 0 10px 0;">2) Signatures</h3>
-    <div id="syntheseText" class="small" style="margin-bottom:15px; font-weight: bold;"></div>
+    <div id="syntheseText" class="small" style="margin-bottom:15px; font-weight: bold; color: #111827;"></div>
     <div class="row">
       <div>
         <label>Contrôleur</label>
@@ -126,12 +129,12 @@
         <button class="btn danger" id="clearSigControleur" style="margin-top:5px; padding:5px 10px; font-size:12px;">Effacer</button>
       </div>
       <div>
-        <label>Entreprise</label>
+        <label>Entreprise (Poseur)</label>
         <canvas id="sigEntreprise" width="400" height="150" style="border:1px solid #ddd; background:#fff; width:100%; border-radius:10px; touch-action:none;"></canvas>
         <button class="btn danger" id="clearSigEntreprise" style="margin-top:5px; padding:5px 10px; font-size:12px;">Effacer</button>
       </div>
       <div>
-        <label>Client</label>
+        <label>Client (Mairie/Syndicat)</label>
         <canvas id="sigClient" width="400" height="150" style="border:1px solid #ddd; background:#fff; width:100%; border-radius:10px; touch-action:none;"></canvas>
         <button class="btn danger" id="clearSigClient" style="margin-top:5px; padding:5px 10px; font-size:12px;">Effacer</button>
       </div>
@@ -139,25 +142,29 @@
   </section>
 </main>
 
-<div id="pdfLoading"><div class="spinner"></div><div>Création du rapport...</div></div>
+<div id="pdfLoading"><div class="spinner"></div><div>Génération du rapport...</div></div>
 
 <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
 
 <script>
 /* =========================
-   UTILS & DB
+   1. BASES ET STOCKAGE
 ========================= */
-const DB_NAME = "reception_db_v3", DB_STORE = "photos";
+const DB_NAME = "CHANTIER_SOLAIRE_V3", DB_STORE = "PHOTOS";
 const byId = (id) => document.getElementById(id);
 const newId = (p="id") => `${p}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2,8)}`;
 const escapeHtml = (s) => String(s||"").replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":"&#039;"}[m]));
 
 const openDB = () => new Promise(res => {
   const req = indexedDB.open(DB_NAME, 1);
-  req.onupgradeneeded = () => { const db = req.result; if(!db.objectStoreNames.contains(DB_STORE)) db.createObjectStore(DB_STORE, {keyPath:"id"}).createIndex("pointId","pointId"); };
+  req.onupgradeneeded = () => { 
+    const db = req.result; 
+    if(!db.objectStoreNames.contains(DB_STORE)) db.createObjectStore(DB_STORE, {keyPath:"id"}).createIndex("pointId","pointId");
+  };
   req.onsuccess = () => res(req.result);
 });
+
 const idbPut = async (o) => { const db = await openDB(); const tx = db.transaction(DB_STORE,"readwrite"); tx.objectStore(DB_STORE).put(o); return new Promise(r => tx.oncomplete = r); };
 const idbGetPhotos = async (pid) => { const db = await openDB(); const req = db.transaction(DB_STORE).objectStore(DB_STORE).index("pointId").getAll(pid); return new Promise(r => req.onsuccess = () => r(req.result)); };
 const idbDel = async (id) => { const db = await openDB(); const tx = db.transaction(DB_STORE,"readwrite"); tx.objectStore(DB_STORE).delete(id); return new Promise(r => tx.oncomplete = r); };
@@ -168,9 +175,11 @@ const compressImg = (file) => new Promise((res) => {
     const img = new Image();
     img.onload = () => {
       const canvas = document.createElement("canvas");
-      const ratio = Math.min(1000/img.width, 1000/img.height, 1);
-      canvas.width = img.width * ratio; canvas.height = img.height * ratio;
-      canvas.getContext("2d").drawImage(img, 0, 0, canvas.width, canvas.height);
+      const max = 1000;
+      let w = img.width, h = img.height;
+      if (w > h && w > max) { h *= max/w; w = max; } else if (h > max) { w *= max/h; h = max; }
+      canvas.width = w; canvas.height = h;
+      canvas.getContext("2d").drawImage(img, 0, 0, w, h);
       res(canvas.toDataURL("image/jpeg", 0.7));
     };
     img.src = e.target.result;
@@ -179,90 +188,78 @@ const compressImg = (file) => new Promise((res) => {
 });
 
 /* =========================
-   STATE & LOGIC
+   2. LOGIQUE DES POINTS
 ========================= */
 const defaultPoint = (parent = null) => ({
   id: newId("pt"), numero: "", repere: "", lat: "", lon: "", reserves_txt: "", date_reprise: "", parentId: parent
 });
 
-let state = { chantier: { projet:"", commune:"", zone:"", date:new Date().toISOString().split('T')[0], poseur:"", chef:"", controleur:"", signatures:{} }, points: [defaultPoint()] };
-
-const save = () => {
-  const cur = localStorage.getItem("FL_CUR") || "default";
-  localStorage.setItem(`FICHE_${cur}`, JSON.stringify(state));
-  const idx = JSON.parse(localStorage.getItem("FL_IDX") || "[]");
-  const name = `${state.chantier.projet || 'Nouveau'} (${state.chantier.commune || ''})`;
-  const next = idx.find(f => f.id === cur) ? idx.map(f => f.id === cur ? {...f, name, up:Date.now()} : f) : [...idx, {id:cur, name, up:Date.now()}];
-  localStorage.setItem("FL_IDX", JSON.stringify(next));
+let state = { 
+  chantier: { projet:"", commune:"", zone:"", date:new Date().toISOString().split('T')[0], poseur:"", poseurAutre:"", chef:"", controleur:"", controleurAutre:"", signatures:{} }, 
+  points: [defaultPoint()] 
 };
 
-const load = () => {
-  const cur = localStorage.getItem("FL_CUR") || "default";
-  const raw = localStorage.getItem(`FICHE_${cur}`);
-  if(raw) state = JSON.parse(raw);
-  if(!state.points.length) state.points = [defaultPoint()];
+const autoSave = () => {
+  const curId = localStorage.getItem("FL_CUR") || "default";
+  localStorage.setItem(`FICHE_${curId}`, JSON.stringify(state));
+  const idx = JSON.parse(localStorage.getItem("FL_IDX") || "[]");
+  const name = `${state.chantier.projet || 'Nouveau'} - ${state.chantier.commune || ''}`;
+  const nextIdx = idx.find(f => f.id === curId) ? idx.map(f => f.id === curId ? {...f, name, up:Date.now()} : f) : [...idx, {id:curId, name, up:Date.now()}];
+  localStorage.setItem("FL_IDX", JSON.stringify(nextIdx));
 };
 
 /* =========================
-   RENDU
+   3. RENDU INTERFACE
 ========================= */
-const renderPoint = async (p, label) => {
+const renderPointHtml = async (p, label) => {
   const photos = await idbGetPhotos(p.id);
+  const isChild = p.parentId !== null;
   return `
-  <section class="card ${p.parentId ? 'linked' : ''}" data-id="${p.id}">
+  <section class="card ${isChild ? 'linked-point' : ''}" data-id="${p.id}">
     <div class="point-head">
-      <div><strong>RÉSERVE ${label}</strong></div>
+      <div><span class="pill bad">POINT ${label}</span></div>
       <div class="btnrow">
         <button class="btn secondary" data-action="gps">📍 GPS</button>
-        ${!p.parentId ? `<button class="btn" style="background:#2563eb;" data-action="link">➕ Doubler</button>` : ''}
-        <button class="btn danger" data-action="del">🗑️</button>
+        ${!isChild ? `<button class="btn blue" data-action="duplicate">➕ Doubler (ex: 1.1)</button>` : ''}
+        <button class="btn danger" data-action="delete">🗑️</button>
       </div>
     </div>
-    <div class="row" style="margin-top:10px;">
-      <div><label>N° Luminaire</label><input value="${escapeHtml(p.numero)}" data-k="numero" placeholder="Obligatoire" style="${!p.numero?'border:2px solid red':''}"></div>
+    <div class="row" style="margin-top:12px;">
+      <div><label>N° Luminaire</label><input value="${escapeHtml(p.numero)}" data-k="numero" style="${!p.numero?'border:2px solid red':''}"></div>
       <div><label>Repère / Adresse</label><input value="${escapeHtml(p.repere)}" data-k="repere"></div>
     </div>
     <div class="row" style="margin-top:10px;">
-      <div><label>Lat</label><input value="${p.lat}" readonly></div>
-      <div><label>Lon</label><input value="${p.lon}" readonly></div>
+      <div><label>Latitude</label><input value="${p.lat}" readonly class="small"></div>
+      <div><label>Longitude</label><input value="${p.lon}" readonly class="small"></div>
     </div>
-    <textarea style="margin-top:10px;" data-k="reserves_txt" placeholder="Description de l'anomalie...">${escapeHtml(p.reserves_txt)}</textarea>
+    <textarea style="margin-top:10px;" data-k="reserves_txt">${escapeHtml(p.reserves_txt)}</textarea>
     <div style="margin-top:10px;">
-      <label>Photos</label>
       <input type="file" accept="image/*" multiple data-action="addImg">
       <div class="photos">${photos.map(ph => `<div class="thumb"><img src="${ph.dataUrl}"><button class="btn danger" style="padding:2px;width:100%;font-size:10px;" data-action="delImg" data-img="${ph.id}">Suppr.</button></div>`).join("")}</div>
     </div>
   </section>`;
 };
 
-const refresh = async () => {
+const refreshDisplay = async () => {
   const wrap = byId("pointsWrap");
-  const chunks = [];
-  const mains = state.points.filter(x => !x.parentId);
+  let html = "";
+  const mains = state.points.filter(x => x.parentId === null);
   for(let i=0; i<mains.length; i++){
-    chunks.push(await renderPoint(mains[i], i+1));
-    const subs = state.points.filter(x => x.parentId === mains[i].id);
-    for(let j=0; j<subs.length; j++){
-      chunks.push(await renderPoint(subs[j], `${i+1}.${j+1}`));
-    }
+    html += await renderPointHtml(mains[i], i+1);
+    const children = state.points.filter(x => x.parentId === mains[i].id);
+    for(let j=0; j<children.length; j++) html += await renderPointHtml(children[j], `${i+1}.${j+1}`);
   }
-  wrap.innerHTML = chunks.join("");
-  byId("syntheseText").innerText = `Total : ${state.points.length} réserves enregistrées.`;
+  wrap.innerHTML = html;
+  byId("syntheseText").innerText = `Total : ${state.points.length} réserves.`;
 };
 
 /* =========================
-   EVENTS
+   4. EVENTS
 ========================= */
 document.body.addEventListener("input", e => {
   const card = e.target.closest("[data-id]");
-  if(card && e.target.dataset.k) {
-    state.points.find(p => p.id === card.dataset.id)[e.target.dataset.k] = e.target.value;
-    save();
-  }
-  if(e.target.id && state.chantier.hasOwnProperty(e.target.id)) {
-    state.chantier[e.target.id] = e.target.value;
-    save();
-  }
+  if(card && e.target.dataset.k) { state.points.find(p => p.id === card.dataset.id)[e.target.dataset.k] = e.target.value; autoSave(); }
+  if(e.target.id && state.chantier.hasOwnProperty(e.target.id)) { state.chantier[e.target.id] = e.target.value; autoSave(); }
 });
 
 document.body.addEventListener("click", async e => {
@@ -274,111 +271,168 @@ document.body.addEventListener("click", async e => {
   if(action === "gps") navigator.geolocation.getCurrentPosition(pos => {
     const p = state.points.find(x => x.id === pid);
     p.lat = pos.coords.latitude.toFixed(6); p.lon = pos.coords.longitude.toFixed(6);
-    save(); refresh();
+    autoSave(); refreshDisplay();
   });
 
-  if(action === "link") {
+  if(action === "duplicate") {
     const parent = state.points.find(x => x.id === pid);
     const child = defaultPoint(parent.id);
     child.reserves_txt = parent.reserves_txt; child.repere = parent.repere;
-    state.points.push(child); save(); refresh();
+    state.points.push(child); autoSave(); refreshDisplay();
   }
 
-  if(action === "del") { if(confirm("Supprimer ?")){ state.points = state.points.filter(x => x.id !== pid && x.parentId !== pid); save(); refresh(); } }
-
-  if(action === "delImg") { await idbDel(btn.dataset.img); refresh(); }
-
-  if(e.target.id === "addPointBtn") { state.points.push(defaultPoint()); save(); refresh(); }
-  
-  if(e.target.id === "saveFicheBtn") { save(); alert("Enregistré !"); }
+  if(action === "delete") { if(confirm("Supprimer ?")){ state.points = state.points.filter(x => x.id !== pid && x.parentId !== pid); autoSave(); refreshDisplay(); } }
+  if(action === "delImg") { await idbDel(btn.dataset.img); refreshDisplay(); }
+  if(e.target.id === "addPointBtn") { state.points.push(defaultPoint()); autoSave(); refreshDisplay(); }
+  if(e.target.id === "saveFicheBtn") { autoSave(); alert("Enregistré !"); }
 });
 
 document.body.addEventListener("change", async e => {
   if(e.target.dataset.action === "addImg") {
     const pid = e.target.closest("[data-id]").dataset.id;
-    for(const f of e.target.files) {
-      const dataUrl = await compressImg(f);
-      await idbPut({id:newId("ph"), pointId:pid, dataUrl});
-    }
-    refresh();
+    for(const f of e.target.files) { const dataUrl = await compressImg(f); await idbPut({id:newId("ph"), pointId:pid, dataUrl}); }
+    refreshDisplay();
   }
 });
 
 /* =========================
-   SIGNATURES & PDF
+   5. PDF TABLEAU (PRÉFÉRÉ)
 ========================= */
-const initSigs = () => {
-  ["sigControleur", "sigEntreprise", "sigClient"].forEach(id => {
-    const canvas = byId(id), ctx = canvas.getContext("2d");
-    const key = id.replace("sig","").toLowerCase();
-    if(state.chantier.signatures[key]) {
-      const img = new Image(); img.onload = () => ctx.drawImage(img,0,0,canvas.width,canvas.height);
-      img.src = state.chantier.signatures[key];
-    }
-    canvas.onpointerdown = e => { ctx.beginPath(); ctx.moveTo(e.offsetX, e.offsetY); canvas.onpointermove = ev => { ctx.lineTo(ev.offsetX, ev.offsetY); ctx.stroke(); }; };
-    canvas.onpointerup = () => { canvas.onpointermove = null; state.chantier.signatures[key] = canvas.toDataURL(); save(); };
-    byId(`clear${id}`).onclick = () => { ctx.clearRect(0,0,canvas.width,canvas.height); state.chantier.signatures[key]=""; save(); };
-  });
+const getLogoDataUrl = async () => {
+  try {
+    const res = await fetch("logo.png");
+    const blob = await res.blob();
+    return await new Promise(r => { const f=new FileReader(); f.onload=()=>r(f.result); f.readAsDataURL(blob); });
+  } catch { return ""; }
 };
 
 const generatePDF = async (share = false) => {
-  if(state.points.some(p => !p.numero)) return alert("Numéros de luminaires manquants !");
+  if(state.points.some(p => !p.numero)) return alert("Veuillez saisir le N° de luminaire pour tous les points.");
   byId("pdfLoading").style.display = "flex";
   
+  const logo = await getLogoDataUrl();
   const container = document.createElement("div");
   container.style.width = "800px"; container.style.padding = "20px"; container.style.background = "#fff";
   container.style.position = "absolute"; container.style.left = "-9999px";
   
-  const logo = await fetch("logo.png").then(r => r.blob()).then(b => new Promise(res => {const f=new FileReader(); f.onload=()=>res(f.result); f.readAsDataURL(b);})).catch(()=>"");
+  // Construction des lignes du tableau
+  let tableRows = "";
+  const mains = state.points.filter(x => x.parentId === null);
+  for(let i=0; i<mains.length; i++){
+    const p = mains[i];
+    const phs = await idbGetPhotos(p.id);
+    const label = i+1;
+    tableRows += `
+      <tr style="page-break-inside:avoid;">
+        <td style="border:1px solid #ddd;padding:8px;">${label}</td>
+        <td style="border:1px solid #ddd;padding:8px;"><strong>${escapeHtml(p.numero)}</strong></td>
+        <td style="border:1px solid #ddd;padding:8px;background:#fee2e2;color:#991b1b;font-weight:700;">${escapeHtml(p.reserves_txt)}</td>
+        <td style="border:1px solid #ddd;padding:8px;">
+          <div style="display:flex;gap:5px;">${phs.slice(0,3).map(ph=>`<img src="${ph.dataUrl}" style="height:65px;border:1px solid #ddd;border-radius:4px;">`).join("")}</div>
+        </td>
+        <td style="border:1px solid #ddd;padding:8px;font-size:11px;">${p.repere}<br>${p.lat}, ${p.lon}</td>
+      </tr>`;
+      
+    const children = state.points.filter(x => x.parentId === p.id);
+    for(let j=0; j<children.length; j++){
+      const c = children[j];
+      const cPhs = await idbGetPhotos(c.id);
+      tableRows += `
+      <tr style="page-break-inside:avoid; background:#f9fafb;">
+        <td style="border:1px solid #ddd;padding:8px;padding-left:15px;color:#2563eb;">${label}.${j+1}</td>
+        <td style="border:1px solid #ddd;padding:8px;"><strong>${escapeHtml(c.numero)}</strong></td>
+        <td style="border:1px solid #ddd;padding:8px;">${escapeHtml(c.reserves_txt)}</td>
+        <td style="border:1px solid #ddd;padding:8px;">
+          <div style="display:flex;gap:5px;">${cPhs.slice(0,3).map(ph=>`<img src="${ph.dataUrl}" style="height:65px;border:1px solid #ddd;border-radius:4px;">`).join("")}</div>
+        </td>
+        <td style="border:1px solid #ddd;padding:8px;font-size:11px;">${c.repere}<br>${c.lat}, ${c.lon}</td>
+      </tr>`;
+    }
+  }
 
   container.innerHTML = `
-    <div style="display:flex; align-items:center; border-bottom:2px solid #000; padding-bottom:10px;">
-      <img src="${logo}" style="height:60px; margin-right:20px;">
-      <div><h2>Rapport de réserves - PV</h2><p>${state.chantier.projet} - ${state.chantier.commune} (${state.chantier.date})</p></div>
+    <div style="display:flex;align-items:center;border-bottom:2px solid #111827;padding-bottom:10px;margin-bottom:20px;">
+      <img src="${logo}" style="height:70px;margin-right:20px;">
+      <div>
+        <h2 style="margin:0;">PV – Points non conformes (Réserves)</h2>
+        <p style="font-size:12px;margin:5px 0;">Projet: <b>${state.chantier.projet}</b> | Commune: <b>${state.chantier.commune}</b> | Date: <b>${state.chantier.date}</b></p>
+      </div>
     </div>
-    ${byId("pointsWrap").innerHTML}
-    <div style="margin-top:30px; display:flex; gap:10px;">
-      <div style="flex:1; border:1px solid #ddd; padding:10px;"><b>Contrôleur</b><br><img src="${state.chantier.signatures.controleur||''}" style="width:100%"></div>
-      <div style="flex:1; border:1px solid #ddd; padding:10px;"><b>Entreprise</b><br><img src="${state.chantier.signatures.entreprise||''}" style="width:100%"></div>
-      <div style="flex:1; border:1px solid #ddd; padding:10px;"><b>Client</b><br><img src="${state.chantier.signatures.client||''}" style="width:100%"></div>
+    <table style="width:100%;border-collapse:collapse;font-size:12px;">
+      <thead><tr style="background:#f3f4f6;">
+        <th style="border:1px solid #ddd;padding:8px;text-align:left;">#</th>
+        <th style="border:1px solid #ddd;padding:8px;text-align:left;">N° Lum.</th>
+        <th style="border:1px solid #ddd;padding:8px;text-align:left;">Observation</th>
+        <th style="border:1px solid #ddd;padding:8px;text-align:left;">Photos</th>
+        <th style="border:1px solid #ddd;padding:8px;text-align:left;">Localisation</th>
+      </tr></thead>
+      <tbody>${tableRows}</tbody>
+    </table>
+    <div style="margin-top:30px;display:flex;gap:15px;">
+      ${["Contrôleur","Entreprise","Client"].map(t => `
+        <div style="flex:1;border:1px solid #ddd;padding:10px;">
+          <b>${t}</b><br>
+          ${state.chantier.signatures[t.toLowerCase()] ? `<img src="${state.chantier.signatures[t.toLowerCase()]}" style="width:100%;max-height:120px;object-fit:contain;">` : `<div style="height:80px;"></div>`}
+        </div>
+      `).join("")}
     </div>`;
   
   document.body.appendChild(container);
   const canvas = await html2canvas(container, {scale:2});
   const pdf = new window.jspdf.jsPDF();
-  pdf.addImage(canvas.toDataURL("image/jpeg", 0.9), "JPEG", 5, 5, 200, (canvas.height*200)/canvas.width);
+  const pdfW = pdf.internal.pageSize.getWidth();
+  const pdfH = (canvas.height * pdfW) / canvas.width;
+  pdf.addImage(canvas.toDataURL("image/jpeg", 0.9), "JPEG", 0, 0, pdfW, pdfH);
   
-  const name = `PV_${state.chantier.commune||'Chantier'}.pdf`;
+  const name = `PV_${state.chantier.commune||'Export'}.pdf`;
   if(share && navigator.share) {
     const file = new File([pdf.output("blob")], name, {type:"application/pdf"});
-    await navigator.share({files:[file], title:"PV de réception"});
-  } else {
-    pdf.save(name);
-  }
+    await navigator.share({files:[file], title:"PV Réception"});
+  } else pdf.save(name);
   
   container.remove(); byId("pdfLoading").style.display = "none";
 };
 
 /* =========================
-   INIT
+   6. INITIALISATION
 ========================= */
+const initSignatures = () => {
+  ["sigControleur", "sigEntreprise", "sigClient"].forEach(id => {
+    const canvas = byId(id), ctx = canvas.getContext("2d");
+    const key = id.replace("sig","").toLowerCase();
+    ctx.lineWidth = 2; ctx.lineCap = "round";
+    if(state.chantier.signatures[key]) {
+      const img = new Image(); img.onload = () => ctx.drawImage(img,0,0,canvas.width,canvas.height);
+      img.src = state.chantier.signatures[key];
+    }
+    let drawing = false;
+    const getPos = (e) => {
+        const rect = canvas.getBoundingClientRect();
+        const c = e.touches ? e.touches[0] : e;
+        return { x: (c.clientX - rect.left) * (canvas.width / rect.width), y: (c.clientY - rect.top) * (canvas.height / rect.height) };
+    };
+    const start = (e) => { e.preventDefault(); drawing = true; ctx.beginPath(); const p = getPos(e); ctx.moveTo(p.x, p.y); };
+    const move = (e) => { if(drawing) { e.preventDefault(); const p = getPos(e); ctx.lineTo(p.x, p.y); ctx.stroke(); } };
+    const stop = () => { if(drawing) { drawing = false; state.chantier.signatures[key] = canvas.toDataURL(); autoSave(); } };
+    canvas.addEventListener("mousedown", start); canvas.addEventListener("mousemove", move); window.addEventListener("mouseup", stop);
+    canvas.addEventListener("touchstart", start, {passive:false}); canvas.addEventListener("touchmove", move, {passive:false}); canvas.addEventListener("touchend", stop);
+    byId(`clear${id}`).onclick = () => { ctx.clearRect(0,0,canvas.width,canvas.height); state.chantier.signatures[key]=""; autoSave(); };
+  });
+};
+
 (async () => {
-  load();
-  byId("projet").value = state.chantier.projet;
-  byId("commune").value = state.chantier.commune;
-  byId("date").value = state.chantier.date;
-  
+  const curId = localStorage.getItem("FL_CUR") || "default";
+  const raw = localStorage.getItem(`FICHE_${curId}`);
+  if(raw) state = JSON.parse(raw);
+  byId("projet").value = state.chantier.projet; byId("commune").value = state.chantier.commune; byId("date").value = state.chantier.date;
   const idx = JSON.parse(localStorage.getItem("FL_IDX") || "[]");
   byId("ficheSelect").innerHTML = idx.map(f => `<option value="${f.id}">${f.name}</option>`).join("");
-  byId("ficheSelect").value = localStorage.getItem("FL_CUR") || "default";
-
+  byId("ficheSelect").value = curId;
   byId("ficheSelect").onchange = e => { localStorage.setItem("FL_CUR", e.target.value); location.reload(); };
   byId("newFicheBtn").onclick = () => { const id = newId("f"); localStorage.setItem("FL_CUR", id); location.reload(); };
   byId("pdfBtn").onclick = () => generatePDF(false);
   byId("sharePdfBtn").onclick = () => generatePDF(true);
-  
-  await refresh();
-  initSigs();
+  await refreshDisplay(); initSignatures();
 })();
 </script>
 </body>
