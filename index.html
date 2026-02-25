@@ -168,6 +168,7 @@
     <div class="btnrow" style="margin-top:12px;">
       <button class="btn" id="addPointBtn" type="button">➕ Ajouter un point non conforme</button>
       <button class="btn secondary" id="pdfBtn" type="button">🧾 Exporter PDF</button>
+      <button class="btn" id="sharePdfBtn" type="button" style="background:#2563eb;">📤 Partager (Mail/WhatsApp)</button>
       <button class="btn danger" id="resetBtn" type="button">🧽 Vider la fiche (courante)</button>
     </div>
   </section>
@@ -1163,7 +1164,10 @@ const buildPdfBody = async () => {
   `;
 };
 
-const exportPDF = async () => {
+/* =========================
+   EXPORT PDF & PARTAGE
+========================= */
+const exportPDF = async (action = "save") => {
   let container = null;
 
   try {
@@ -1171,6 +1175,7 @@ const exportPDF = async () => {
     const missing = state.points
       .map((p, i) => (!String(p.numero || "").trim() ? `Point ${i+1}` : null))
       .filter(Boolean);
+      
     if (missing.length) {
       alert("Numéro obligatoire manquant pour : " + missing.join(", "));
       return;
@@ -1179,28 +1184,28 @@ const exportPDF = async () => {
     // 2. Afficher l'écran de chargement
     byId("pdfLoading").style.display = "flex";
 
-    // 3. Créer un conteneur temporaire pour générer l'image du PDF
+    // 3. Préparation du conteneur invisible pour le rendu
     container = document.createElement("div");
     container.style.position = "absolute";
-    container.style.left = "-9999px"; // On le cache en dehors de l'écran (plus fiable que visibility: hidden)
+    container.style.left = "-9999px"; 
     container.style.top = "0";
-    container.style.width = "794px"; // Largeur approximative d'un A4
+    container.style.width = "794px"; 
     container.style.background = "#fff";
     container.style.zIndex = "-1";
 
     container.innerHTML = await buildPdfBody();
     document.body.appendChild(container);
 
-    // Attendre que le navigateur dessine les éléments et charge les polices/images
+    // Attente du rendu (images, polices, etc.)
     await new Promise(r => requestAnimationFrame(r));
     await new Promise(r => requestAnimationFrame(r));
     if (document.fonts && document.fonts.ready) {
       try { await document.fonts.ready; } catch(e) {}
     }
     await waitForImages(container);
-    await new Promise(r => setTimeout(r, 150));
+    await new Promise(r => setTimeout(r, 200));
 
-    // 4. Transformer le HTML en image (Canvas)
+    // 4. Capture du HTML vers Canvas
     const canvas = await html2canvas(container, {
       scale: 1.3,
       useCORS: true,
@@ -1210,38 +1215,34 @@ const exportPDF = async () => {
       imageTimeout: 20000
     });
 
-    // 5. Construire le document PDF
+    // 5. Création du PDF avec jsPDF
     const { jsPDF } = window.jspdf;
     const pdf = new jsPDF({ unit: "mm", format: "a4", orientation: "portrait" });
 
     const pdfW = pdf.internal.pageSize.getWidth();
     const pdfH = pdf.internal.pageSize.getHeight();
-    const M = 8; // Marge en mm
+    const M = 8; 
     const usableW = pdfW - 2 * M;
     const usableH = pdfH - 2 * M;
 
     const imgW = usableW;
     const imgH = canvas.height * (imgW / canvas.width);
 
-    // Si ça tient sur une seule page
+    // Gestion du multi-pages
     if (imgH <= usableH) {
       const imgData = canvas.toDataURL("image/jpeg", 0.90);
       pdf.addImage(imgData, "JPEG", M, M, imgW, imgH);
     } else {
-      // Découpage magique pour le multi-pages
       const pageCanvas = document.createElement("canvas");
       const pageCtx = pageCanvas.getContext("2d");
-
       const pageHpx = Math.floor(canvas.width * (usableH / usableW));
       let y = 0;
       let first = true;
 
       while (y < canvas.height) {
         const sliceH = Math.min(pageHpx, canvas.height - y);
-
         pageCanvas.width = canvas.width;
         pageCanvas.height = sliceH;
-
         pageCtx.clearRect(0, 0, pageCanvas.width, pageCanvas.height);
         pageCtx.drawImage(canvas, 0, y, canvas.width, sliceH, 0, 0, pageCanvas.width, sliceH);
 
@@ -1250,26 +1251,48 @@ const exportPDF = async () => {
 
         if (!first) pdf.addPage();
         first = false;
-
         pdf.addImage(pageImg, "JPEG", M, M, imgW, pageImgH_mm);
         y += sliceH;
       }
     }
 
-    // 6. Cacher l'écran de chargement
+    // 6. Fin du chargement
     byId("pdfLoading").style.display = "none";
 
-    // 7. Déclencher le téléchargement propre
+    // 7. LOGIQUE DE SORTIE (Sauvegarde ou Partage)
     const nomCommune = state.chantier.commune ? state.chantier.commune.replace(/[^a-zA-Z0-9]/g, "_") : "Fiche";
     const nomFichier = `PV_Reserves_${nomCommune}.pdf`;
-    
-    pdf.save(nomFichier);
+
+    if (action === "share") {
+      // Transformation en fichier réel pour le partage
+      const blob = pdf.output("blob");
+      const file = new File([blob], nomFichier, { type: "application/pdf" });
+      
+      // Tentative de partage natif (iOS/Android/Navigateurs récents)
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        try {
+          await navigator.share({
+            files: [file],
+            title: 'PV de Réception - ' + nomCommune,
+            text: 'Ci-joint le rapport de réception de chantier.'
+          });
+        } catch (err) {
+          // Si l'utilisateur annule le partage, on ne fait rien de particulier
+          console.log("Partage annulé ou échoué", err);
+        }
+      } else {
+        alert("Le partage n'est pas supporté sur ce navigateur. Le PDF va être téléchargé.");
+        pdf.save(nomFichier);
+      }
+    } else {
+      // Sauvegarde standard
+      pdf.save(nomFichier);
+    }
 
   } catch (e) {
     byId("pdfLoading").style.display = "none";
-    alert("Erreur PDF : " + (e?.message || e));
+    alert("Erreur technique lors de la création du PDF : " + (e?.message || e));
   } finally {
-    // Toujours nettoyer le conteneur à la fin
     if (container) container.remove();
   }
 };
@@ -1285,7 +1308,11 @@ const bindButtons = () => {
     window.scrollTo({ top: document.body.scrollHeight, behavior: "smooth" });
   });
 
-  byId("pdfBtn").addEventListener("click", exportPDF);
+  // Le bouton classique télécharge
+  byId("pdfBtn").addEventListener("click", () => exportPDF("save"));
+  
+  // Le nouveau bouton lance le menu de partage
+  byId("sharePdfBtn").addEventListener("click", () => exportPDF("share"));
 
   // vider la fiche courante (sans toucher les autres fiches)
   byId("resetBtn").addEventListener("click", async () => {
@@ -1419,4 +1446,5 @@ const bindFichesUI = () => {
 </script>
 </body>
 </html>
+
 
