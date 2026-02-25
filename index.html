@@ -76,6 +76,7 @@
 </header>
 
 <main>
+  <!-- CHANTIER -->
   <section class="card" id="chantierCard">
     <h3 style="margin:0 0 10px 0;">1) Infos chantier</h3>
 
@@ -140,10 +141,12 @@
       </div>
     </div>
 
+    <!-- MES FICHES -->
     <div class="row" style="margin-top:12px;">
       <div>
         <label>📂 Mes fiches</label>
         <select id="ficheSelect"></select>
+        <div class="small" style="margin-top:6px;">Conseil : duplique une fiche “type”, puis modifie.</div>
       </div>
 
       <div>
@@ -153,6 +156,11 @@
           <button class="btn" id="saveFicheBtn" type="button">💾 Sauver</button>
           <button class="btn secondary" id="dupFicheBtn" type="button">📄 Dupliquer</button>
           <button class="btn danger" id="delFicheBtn" type="button">🗑️ Supprimer</button>
+
+          <!-- ✅ NOUVEAU : Export / Import JSON (avec photos + signatures) -->
+          <button class="btn secondary" id="exportJsonBtn" type="button">⬇️ Export JSON</button>
+          <button class="btn secondary" id="importJsonBtn" type="button">⬆️ Import JSON</button>
+          <input id="importJsonInput" type="file" accept="application/json" style="display:none;" />
         </div>
       </div>
     </div>
@@ -160,13 +168,14 @@
     <div class="btnrow" style="margin-top:12px;">
       <button class="btn" id="addPointBtn" type="button">➕ Ajouter un point non conforme</button>
       <button class="btn secondary" id="pdfBtn" type="button">🧾 Exporter PDF</button>
-      <button class="btn" id="sharePdfBtn" type="button" style="background:#2563eb;">📤 Partager (Mail/WhatsApp)</button>
       <button class="btn danger" id="resetBtn" type="button">🧽 Vider la fiche (courante)</button>
     </div>
   </section>
 
+  <!-- POINTS -->
   <section id="pointsWrap"></section>
 
+  <!-- SYNTHESE + SIGNATURES -->
   <section class="card" id="syntheseCard">
     <h3 style="margin:0 0 10px 0;">2) Synthèse</h3>
     <div id="syntheseText" class="small"></div>
@@ -206,6 +215,7 @@
   </section>
 </main>
 
+<!-- Overlay -->
 <div id="pdfLoading">
   <div class="box">
     <div class="spinner"></div>
@@ -213,22 +223,30 @@
   </div>
 </div>
 
+<!-- html2canvas (global html2canvas) -->
 <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+<!-- jsPDF UMD (global window.jspdf.jsPDF) -->
 <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
 
 <script>
 /* =========================
-   Stockage & Helpers
+   Stockage
+   - Fiches (state) : localStorage (plusieurs fiches)
+   - Photos : IndexedDB
 ========================= */
-const LS_KEY_FALLBACK = "reception_lampadaire_state_fallback_v1";
+
+const LS_KEY_FALLBACK = "reception_lampadaire_state_fallback_v1"; // ancien fallback
 const FICHES_INDEX_KEY = "FL_FICHES_INDEX_V1";
 const CURRENT_FICHE_KEY = "FL_CURRENT_FICHE_ID_V1";
+
 const DB_NAME = "reception_lampadaire_photos_v1";
 const DB_STORE = "photos";
 
 const byId = (id) => document.getElementById(id);
 const ficheStorageKey = (id) => `FL_FICHE_${id}`;
-const newId = (prefix="id") => `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2,8)}`;
+
+const newId = (prefix="id") =>
+  `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2,8)}`;
 
 const todayISO = () => {
   const d = new Date();
@@ -237,17 +255,23 @@ const todayISO = () => {
 };
 
 function escapeHtml(str){
-  return String(str ?? "").replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"',"&quot;").replaceAll("'","&#039;");
+  return String(str ?? "")
+    .replaceAll("&","&amp;")
+    .replaceAll("<","&lt;")
+    .replaceAll(">","&gt;")
+    .replaceAll('"',"&quot;")
+    .replaceAll("'","&#039;");
 }
 
 const makeFicheLabel = (st) => {
   const proj = (st?.chantier?.projet || "").trim();
   const com = (st?.chantier?.commune || "").trim();
   const d = (st?.chantier?.date || "").trim();
-  return [proj, com, d].filter(Boolean).join(" — ") || "Fiche sans nom";
+  const base = [proj, com, d].filter(Boolean).join(" — ");
+  return base || "Fiche sans nom";
 };
 
-/* ===== IndexedDB ===== */
+/* ===== IndexedDB helpers ===== */
 const openDB = () => new Promise((resolve, reject) => {
   const req = indexedDB.open(DB_NAME, 1);
   req.onupgradeneeded = () => {
@@ -263,42 +287,58 @@ const openDB = () => new Promise((resolve, reject) => {
 
 const idbPut = async (obj) => {
   const db = await openDB();
-  const tx = db.transaction(DB_STORE, "readwrite");
-  tx.objectStore(DB_STORE).put(obj);
-  return new Promise((res) => { tx.oncomplete = () => { db.close(); res(); }; });
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(DB_STORE, "readwrite");
+    tx.objectStore(DB_STORE).put(obj);
+    tx.oncomplete = () => { db.close(); resolve(true); };
+    tx.onerror = () => { db.close(); reject(tx.error); };
+  });
 };
 
 const idbGetManyByPoint = async (pointId) => {
   const db = await openDB();
-  const tx = db.transaction(DB_STORE, "readonly");
-  const idx = tx.objectStore(DB_STORE).index("pointId");
-  const req = idx.getAll(pointId);
-  return new Promise((res) => { req.onsuccess = () => { db.close(); res(req.result || []); }; });
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(DB_STORE, "readonly");
+    const idx = tx.objectStore(DB_STORE).index("pointId");
+    const req = idx.getAll(pointId);
+    req.onsuccess = () => { const r = req.result || []; db.close(); resolve(r); };
+    req.onerror = () => { db.close(); reject(req.error); };
+  });
 };
 
 const idbDelete = async (id) => {
   const db = await openDB();
-  const tx = db.transaction(DB_STORE, "readwrite");
-  tx.objectStore(DB_STORE).delete(id);
-  return new Promise((res) => { tx.oncomplete = () => { db.close(); res(); }; });
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(DB_STORE, "readwrite");
+    tx.objectStore(DB_STORE).delete(id);
+    tx.oncomplete = () => { db.close(); resolve(true); };
+    tx.onerror = () => { db.close(); reject(tx.error); };
+  });
 };
 
-/* ===== Images ===== */
+/* ===== Images: compression + resize ===== */
 const compressImageToDataUrl = (file, opts = {}) => new Promise((resolve, reject) => {
   const { maxW = 1280, maxH = 1280, quality = 0.75, mime = "image/jpeg" } = opts;
   const img = new Image();
   const url = URL.createObjectURL(file);
+
   img.onload = () => {
     let w = img.width, h = img.height;
     const ratio = Math.min(maxW / w, maxH / h, 1);
-    const nw = Math.max(1, Math.round(w * ratio)), nh = Math.max(1, Math.round(h * ratio));
+    const nw = Math.max(1, Math.round(w * ratio));
+    const nh = Math.max(1, Math.round(h * ratio));
+
     const canvas = document.createElement("canvas");
     canvas.width = nw; canvas.height = nh;
-    canvas.getContext("2d").drawImage(img, 0, 0, nw, nh);
+    const ctx = canvas.getContext("2d");
+    ctx.drawImage(img, 0, 0, nw, nh);
     URL.revokeObjectURL(url);
-    resolve(canvas.toDataURL(mime, quality));
+
+    try {
+      resolve(canvas.toDataURL(mime, quality));
+    } catch (e) { reject(e); }
   };
-  img.onerror = () => reject();
+  img.onerror = (e) => { URL.revokeObjectURL(url); reject(e); };
   img.src = url;
 });
 
@@ -306,256 +346,1075 @@ const waitForImages = (root) => {
   const imgs = Array.from(root.querySelectorAll("img"));
   return Promise.all(imgs.map(img => {
     if (img.complete && img.naturalWidth > 0) return Promise.resolve();
-    return new Promise((res) => { img.onload = res; img.onerror = res; });
+    return new Promise((res) => {
+      img.onload = () => res();
+      img.onerror = () => res();
+    });
   }));
 };
 
+/* ===== Logo -> dataURL (fiable iPad PDF) ===== */
 let LOGO_DATAURL_CACHE = "";
 const getLogoDataUrl = async () => {
   if (LOGO_DATAURL_CACHE) return LOGO_DATAURL_CACHE;
   try {
-    const res = await fetch("logo.png");
+    const res = await fetch("logo.png", { cache: "no-store" });
     const blob = await res.blob();
-    LOGO_DATAURL_CACHE = await new Promise((resolve) => {
-      const r = new FileReader(); r.onload = () => resolve(r.result); r.readAsDataURL(blob);
+    const dataUrl = await new Promise((resolve, reject) => {
+      const r = new FileReader();
+      r.onload = () => resolve(r.result);
+      r.onerror = reject;
+      r.readAsDataURL(blob);
     });
-    return LOGO_DATAURL_CACHE;
-  } catch { return "logo.png"; }
+    LOGO_DATAURL_CACHE = dataUrl;
+    return dataUrl;
+  } catch {
+    return "logo.png";
+  }
 };
 
 /* =========================
-   State & Fiches Logic
+   State
 ========================= */
-const defaultPoint = () => ({ id: newId("pt"), numero: "", repere: "", lat: "", lon: "", reserves_txt: "", date_reprise: "" });
+const defaultPoint = () => ({
+  id: newId("pt"),
+  numero: "",
+  repere: "",
+  lat: "",
+  lon: "",
+  reserves_txt: "",
+  date_reprise: "",
+});
+
 const emptyState = () => ({
-  chantier: { projet: "", commune: "", zone: "", date: todayISO(), poseur: "", poseurAutre: "", chef: "", controleur: "", controleurAutre: "", signatures: { controleur:"", entreprise:"", client:"" } },
+  chantier: {
+    projet: "", commune: "", zone: "", date: todayISO(),
+    poseur: "", poseurAutre: "",
+    chef: "",
+    controleur: "", controleurAutre: "",
+    signatures: { controleur:"", entreprise:"", client:"" }
+  },
   points: [ defaultPoint() ]
 });
 
 let state = emptyState();
 
 const ensureSignatures = () => {
-  state.chantier.signatures = state.chantier.signatures || { controleur:"", entreprise:"", client:"" };
+  state.chantier.signatures ||= { controleur:"", entreprise:"", client:"" };
+  state.chantier.signatures.controleur ||= "";
+  state.chantier.signatures.entreprise ||= "";
+  state.chantier.signatures.client ||= "";
 };
 
-const loadFichesIndex = () => JSON.parse(localStorage.getItem(FICHES_INDEX_KEY) || "[]");
+/* =========================
+   Fiches (multi)
+========================= */
+const loadFichesIndex = () => {
+  try { return JSON.parse(localStorage.getItem(FICHES_INDEX_KEY) || "[]"); }
+  catch { return []; }
+};
 const saveFichesIndex = (arr) => localStorage.setItem(FICHES_INDEX_KEY, JSON.stringify(arr));
 const getCurrentFicheId = () => localStorage.getItem(CURRENT_FICHE_KEY) || "";
 const setCurrentFicheId = (id) => localStorage.setItem(CURRENT_FICHE_KEY, id);
 
+/* ✅ NEW: rebuild index si vide (robustesse) */
+const rebuildIndexFromLocalStorage = () => {
+  const keys = Object.keys(localStorage);
+  const ids = keys
+    .filter(k => k.startsWith("FL_FICHE_"))
+    .map(k => k.replace("FL_FICHE_", ""));
+
+  const index = [];
+  for (const id of ids) {
+    try {
+      const st = JSON.parse(localStorage.getItem(ficheStorageKey(id)) || "null");
+      if (!st?.chantier || !Array.isArray(st?.points)) continue;
+      index.push({ id, name: makeFicheLabel(st), updatedAt: Date.now() });
+    } catch {}
+  }
+  if (index.length) saveFichesIndex(index);
+  return index;
+};
+
+const ensureAtLeastOneFiche = () => {
+  let index = loadFichesIndex();
+  if (!index.length) index = rebuildIndexFromLocalStorage();
+
+  if (!index.length) {
+    const id = newId("fiche");
+    index = [{ id, name: makeFicheLabel(state), updatedAt: Date.now() }];
+    saveFichesIndex(index);
+    setCurrentFicheId(id);
+    localStorage.setItem(ficheStorageKey(id), JSON.stringify(state));
+  }
+
+  if (!getCurrentFicheId()) setCurrentFicheId(index[0].id);
+};
+
 const refreshFicheSelect = () => {
   const sel = byId("ficheSelect");
-  const index = loadFichesIndex().sort((a,b)=> b.updatedAt - a.updatedAt);
-  sel.innerHTML = index.map(f => `<option value="${f.id}">${escapeHtml(f.name)}</option>`).join("");
-  sel.value = getCurrentFicheId();
+  const index = loadFichesIndex().sort((a,b)=> (b.updatedAt||0)-(a.updatedAt||0));
+  const cur = getCurrentFicheId();
+
+  sel.innerHTML = index
+    .map(f => `<option value="${f.id}">${escapeHtml(f.name || "Fiche")}</option>`)
+    .join("");
+
+  sel.value = cur || (index[0]?.id || "");
+};
+
+const loadFiche = async (id) => {
+  const raw = localStorage.getItem(ficheStorageKey(id));
+  if (!raw) return false;
+  try {
+    const parsed = JSON.parse(raw);
+    if (parsed && parsed.chantier && Array.isArray(parsed.points)) {
+      state = parsed;
+      ensureSignatures();
+      setCurrentFicheId(id);
+      await render();
+      initSignatures(true);
+      return true;
+    }
+  } catch {}
+  return false;
 };
 
 const saveCurrentFiche = () => {
   const id = getCurrentFicheId();
   if (!id) return;
+
   localStorage.setItem(ficheStorageKey(id), JSON.stringify(state));
+
   const index = loadFichesIndex();
-  const next = index.map(f => f.id === id ? { ...f, name: makeFicheLabel(state), updatedAt: Date.now() } : f);
+  const name = makeFicheLabel(state);
+
+  const next = index.map(f => f.id === id ? { ...f, name, updatedAt: Date.now() } : f);
   saveFichesIndex(next);
+  refreshFicheSelect();
+};
+
+/* ===== Save / Load fallback ===== */
+const saveState = () => {
+  try {
+    localStorage.setItem(LS_KEY_FALLBACK, JSON.stringify(state)); // fallback
+    saveCurrentFiche();
+    return true;
+  } catch (e) {
+    alert("⚠️ Impossible de sauvegarder. Détail : " + (e?.message || e));
+    return false;
+  }
 };
 
 const loadState = () => {
+  // 1) fiche courante
   const cur = getCurrentFicheId();
-  const raw = cur ? localStorage.getItem(ficheStorageKey(cur)) : localStorage.getItem(LS_KEY_FALLBACK);
-  if (raw) { try { state = JSON.parse(raw); ensureSignatures(); } catch {} }
+  if (cur) {
+    const raw = localStorage.getItem(ficheStorageKey(cur));
+    if (raw) {
+      try {
+        const parsed = JSON.parse(raw);
+        if (parsed && parsed.chantier && Array.isArray(parsed.points)) {
+          state = parsed;
+          return;
+        }
+      } catch {}
+    }
+  }
+
+  // 2) fallback
+  const rawOld = localStorage.getItem(LS_KEY_FALLBACK);
+  if (rawOld) {
+    try {
+      const parsed = JSON.parse(rawOld);
+      if (parsed && parsed.chantier && Array.isArray(parsed.points)) state = parsed;
+    } catch {}
+  }
 };
 
 const duplicateFicheWithPhotos = async () => {
+  const index = loadFichesIndex();
+  const srcId = getCurrentFicheId();
+  if (!srcId) return;
+
   const srcState = JSON.parse(JSON.stringify(state));
   const newFicheId = newId("fiche");
-  srcState.points = await Promise.all(srcState.points.map(async pt => {
-    const newPid = newId("pt");
-    const photos = await idbGetManyByPoint(pt.id);
-    for (const ph of photos) await idbPut({ id: newId("ph"), pointId: newPid, dataUrl: ph.dataUrl, createdAt: Date.now() });
-    return { ...pt, id: newPid };
-  }));
-  localStorage.setItem(ficheStorageKey(newFicheId), JSON.stringify(srcState));
-  const index = loadFichesIndex();
-  index.push({ id: newFicheId, name: makeFicheLabel(srcState) + " (copie)", updatedAt: Date.now() });
-  saveFichesIndex(index);
+  const mapping = new Map();
+
+  const newPoints = (srcState.points || []).map(pt => {
+    const newPointId = newId("pt");
+    mapping.set(pt.id, newPointId);
+    return { ...pt, id: newPointId };
+  });
+
+  const newState = {
+    ...srcState,
+    chantier: { ...srcState.chantier },
+    points: newPoints
+  };
+
+  // dupliquer photos
+  for (const [oldPid, newPid] of mapping.entries()) {
+    const oldPhotos = await idbGetManyByPoint(oldPid);
+    for (const ph of oldPhotos) {
+      await idbPut({
+        id: newId("ph"),
+        pointId: newPid,
+        dataUrl: ph.dataUrl,
+        createdAt: Date.now()
+      });
+    }
+  }
+
+  localStorage.setItem(ficheStorageKey(newFicheId), JSON.stringify(newState));
+
+  const name = makeFicheLabel(newState) + " (copie)";
+  const nextIndex = [...index, { id: newFicheId, name, updatedAt: Date.now() }];
+  saveFichesIndex(nextIndex);
+
   setCurrentFicheId(newFicheId);
-  state = srcState;
+  state = newState;
+  ensureSignatures();
   await render();
   initSignatures(true);
   refreshFicheSelect();
 };
 
+/* ✅ NEW: Export / Import JSON (state + photos + signatures) */
+const exportCurrentFicheToJson = async () => {
+  const ficheId = getCurrentFicheId();
+  if (!ficheId) return;
+
+  const photos = [];
+  for (const pt of state.points || []) {
+    const phs = await idbGetManyByPoint(pt.id);
+    for (const ph of phs) photos.push(ph);
+  }
+
+  const payload = {
+    meta: { exportedAt: new Date().toISOString(), version: 1 },
+    state,
+    photos
+  };
+
+  const blob = new Blob([JSON.stringify(payload)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `fiche_${makeFicheLabel(state).replaceAll(" ", "_").slice(0,60)}.json`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+
+  setTimeout(() => URL.revokeObjectURL(url), 30000);
+};
+
+const importFicheFromJsonFile = async (file) => {
+  const text = await file.text();
+  const payload = JSON.parse(text);
+
+  if (!payload?.state?.chantier || !Array.isArray(payload?.state?.points)) {
+    alert("Fichier JSON invalide.");
+    return;
+  }
+
+  const newFicheId = newId("fiche");
+  const importedState = payload.state;
+
+  // éviter collisions d’IDs -> remapper points/photos
+  const mapping = new Map();
+  importedState.points = (importedState.points || []).map(pt => {
+    const newPid = newId("pt");
+    mapping.set(pt.id, newPid);
+    return { ...pt, id: newPid };
+  });
+
+  const importedPhotos = Array.isArray(payload.photos) ? payload.photos : [];
+  for (const ph of importedPhotos) {
+    const newPointId = mapping.get(ph.pointId);
+    if (!newPointId) continue;
+    await idbPut({
+      id: newId("ph"),
+      pointId: newPointId,
+      dataUrl: ph.dataUrl,
+      createdAt: Date.now()
+    });
+  }
+
+  localStorage.setItem(ficheStorageKey(newFicheId), JSON.stringify(importedState));
+
+  const index = loadFichesIndex();
+  index.push({ id: newFicheId, name: makeFicheLabel(importedState) + " (import)", updatedAt: Date.now() });
+  saveFichesIndex(index);
+
+  setCurrentFicheId(newFicheId);
+  state = importedState;
+  ensureSignatures();
+  await render();
+  initSignatures(true);
+  refreshFicheSelect();
+  alert("✅ Fiche importée");
+};
+
 /* =========================
-   Render & UI
+   Render
 ========================= */
-const renderPoint = (p, idx, photos) => `
-  <section class="card" data-point-id="${p.id}">
-    <div class="point-head">
-      <div><strong>Point ${idx+1}</strong> <span class="pill bad">Non conforme</span></div>
-      <div class="btnrow">
-        <button class="btn secondary" type="button" data-action="gps">📍 GPS</button>
-        <button class="btn danger" type="button" data-action="remove">🗑️ Supprimer</button>
+const renderPoint = (p, idx, photos) => {
+  const numeroStyle = String(p.numero || "").trim() ? "" : "border:2px solid #ef4444;";
+
+  return `
+    <section class="card" data-point-id="${p.id}">
+      <div class="point-head">
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+          <strong>Point ${idx+1}</strong>
+          <span class="pill bad">Non conforme</span>
+          <span class="small">ID: ${p.id.slice(0,8)}</span>
+        </div>
+        <div class="btnrow">
+          <button class="btn secondary" type="button" data-action="gps">📍 GPS</button>
+          <button class="btn danger" type="button" data-action="remove">🗑️ Supprimer</button>
+        </div>
       </div>
-    </div>
-    <div class="row" style="margin-top:12px;">
-      <div><label>N° point lumineux</label><input style="${p.numero?'':'border:2px solid #ef4444'}" value="${escapeHtml(p.numero)}" data-k="numero" /></div>
-      <div><label>Adresse / repère</label><input value="${escapeHtml(p.repere)}" data-k="repere" /></div>
-      <div><label>Lat</label><input value="${escapeHtml(p.lat)}" data-k="lat" /></div>
-      <div><label>Lon</label><input value="${escapeHtml(p.lon)}" data-k="lon" /></div>
-    </div>
-    <div class="row" style="margin-top:12px;">
-      <div><label>Date de reprise</label><input type="date" value="${escapeHtml(p.date_reprise)}" data-k="date_reprise" /></div>
-    </div>
-    <h4 style="margin:14px 0 8px 0;">Commentaire</h4>
-    <textarea data-k="reserves_txt">${escapeHtml(p.reserves_txt)}</textarea>
-    <h4 style="margin:14px 0 8px 0;">Photos</h4>
-    <input type="file" accept="image/*" multiple data-action="addPhotos" />
-    <div class="photos">
-      ${photos.map(ph => `<div class="thumb"><img src="${ph.dataUrl}" /><div><button class="btn danger" style="padding:4px" data-action="rmPhoto" data-photo-id="${ph.id}">Suppr.</button></div></div>`).join("")}
-    </div>
-  </section>`;
+
+      <div class="row" style="margin-top:12px;">
+        <div>
+          <label>N° point lumineux (obligatoire)</label>
+          <input style="${numeroStyle}" value="${escapeHtml(p.numero)}" data-k="numero" placeholder="Ex: PL-12 / A22" />
+        </div>
+        <div>
+          <label>Adresse / repère</label>
+          <input value="${escapeHtml(p.repere)}" data-k="repere" placeholder="Ex: devant maison 24" />
+        </div>
+        <div>
+          <label>Latitude</label>
+          <input value="${escapeHtml(p.lat)}" data-k="lat" placeholder="Auto via bouton GPS" />
+        </div>
+        <div>
+          <label>Longitude</label>
+          <input value="${escapeHtml(p.lon)}" data-k="lon" placeholder="Auto via bouton GPS" />
+        </div>
+      </div>
+
+      <div class="row" style="margin-top:12px;">
+        <div>
+          <label>Date de reprise</label>
+          <input type="date" value="${escapeHtml(p.date_reprise || "")}" data-k="date_reprise" />
+        </div>
+        <div></div>
+      </div>
+
+      <h4 style="margin:14px 0 8px 0;">Commentaire / non-conformité</h4>
+      <textarea data-k="reserves_txt" placeholder="Observations, anomalies…">${escapeHtml(p.reserves_txt)}</textarea>
+
+      <h4 style="margin:14px 0 8px 0;">Photos</h4>
+      <input type="file" accept="image/*" multiple data-action="addPhotos" />
+      <div class="small">Photos stockées localement (IndexedDB) + compressées</div>
+
+      <div class="photos">
+        ${(photos || []).map((ph, i) => `
+          <div class="thumb">
+            <img src="${ph.dataUrl}" alt="photo" />
+            <div>
+              Photo ${i+1}
+              <button class="btn danger" type="button"
+                style="margin-top:6px;padding:6px 8px;font-size:12px;"
+                data-action="rmPhoto" data-photo-id="${ph.id}">Suppr.</button>
+            </div>
+          </div>
+        `).join("")}
+      </div>
+    </section>
+  `;
+};
 
 const render = async () => {
-  const c = state.chantier;
-  byId("projet").value = c.projet; byId("commune").value = c.commune; byId("zone").value = c.zone; byId("date").value = c.date;
-  byId("poseur").value = c.poseur; byId("poseurAutre").value = c.poseurAutre;
-  byId("poseurAutreWrap").style.display = (c.poseur === "__autre__") ? "block" : "none";
-  byId("chef").value = c.chef; byId("controleur").value = c.controleur; byId("controleurAutre").value = c.controleurAutre;
-  byId("controleurAutreWrap").style.display = (c.controleur === "__autre__") ? "block" : "none";
+  byId("projet").value = state.chantier.projet || "";
+  byId("commune").value = state.chantier.commune || "";
+  byId("zone").value = state.chantier.zone || "";
+  byId("date").value = state.chantier.date || todayISO();
 
+  byId("poseur").value = state.chantier.poseur || "";
+  byId("poseurAutre").value = state.chantier.poseurAutre || "";
+  byId("poseurAutreWrap").style.display =
+    (state.chantier.poseur === "__autre__") ? "block" : "none";
+
+  byId("chef").value = state.chantier.chef || "";
+
+  byId("controleur").value = state.chantier.controleur || "";
+  byId("controleurAutre").value = state.chantier.controleurAutre || "";
+  byId("controleurAutreWrap").style.display =
+    (state.chantier.controleur === "__autre__") ? "block" : "none";
+
+  // charge photos par point
   const chunks = [];
   for (let i=0; i<state.points.length; i++){
-    chunks.push(renderPoint(state.points[i], i, await idbGetManyByPoint(state.points[i].id)));
+    const p = state.points[i];
+    const photos = await idbGetManyByPoint(p.id);
+    chunks.push(renderPoint(p, i, photos));
   }
   byId("pointsWrap").innerHTML = chunks.join("");
-  byId("syntheseText").innerHTML = `Points non conformes : <strong>${state.points.length}</strong>`;
+
+  byId("syntheseText").innerHTML = `
+    <div>Points non conformes : <strong>${state.points.length}</strong></div>
+  `;
 };
 
 /* =========================
-   Event Binding
+   Bind chantier
 ========================= */
 const bindChantier = () => {
-  ["projet","commune","zone","date","poseur","chef","controleur"].forEach(id => {
-    byId(id).addEventListener("change", () => { state.chantier[id] = byId(id).value; saveCurrentFiche(); render(); });
+  const map = [
+    ["projet","projet"], ["commune","commune"], ["zone","zone"], ["date","date"],
+    ["poseur","poseur"], ["chef","chef"],
+    ["controleur","controleur"],
+  ];
+
+  map.forEach(([id, key]) => {
+    const el = byId(id);
+    if (!el) return;
+
+    const apply = async () => {
+      state.chantier[key] = el.value;
+      saveState();
+      await render();
+    };
+
+    el.addEventListener("input", apply);
+    el.addEventListener("change", apply);
   });
-  ["poseurAutre","controleurAutre"].forEach(id => {
-    byId(id).addEventListener("input", () => { state.chantier[id] = byId(id).value; saveCurrentFiche(); });
+
+  // Controleur - autre
+  const ctrlSelect = byId("controleur");
+  const ctrlOtherWrap = byId("controleurAutreWrap");
+  const ctrlOtherInput = byId("controleurAutre");
+
+  ctrlSelect.addEventListener("change", async () => {
+    const isOther = ctrlSelect.value === "__autre__";
+    ctrlOtherWrap.style.display = isOther ? "block" : "none";
+    if (!isOther) {
+      state.chantier.controleurAutre = "";
+      ctrlOtherInput.value = "";
+      saveState();
+      await render();
+    }
+  });
+
+  ctrlOtherInput.addEventListener("input", () => {
+    state.chantier.controleurAutre = ctrlOtherInput.value;
+    saveState();
+  });
+
+  // Poseur - autre
+  const poseurSelect = byId("poseur");
+  const poseurOtherWrap = byId("poseurAutreWrap");
+  const poseurOtherInput = byId("poseurAutre");
+
+  poseurSelect.addEventListener("change", async () => {
+    const isOther = poseurSelect.value === "__autre__";
+    poseurOtherWrap.style.display = isOther ? "block" : "none";
+    if (!isOther) {
+      state.chantier.poseurAutre = "";
+      poseurOtherInput.value = "";
+      saveState();
+      await render();
+    }
+  });
+
+  poseurOtherInput.addEventListener("input", () => {
+    state.chantier.poseurAutre = poseurOtherInput.value;
+    saveState();
   });
 };
 
+/* =========================
+   Points events
+========================= */
 const handlePointsEvents = () => {
   const wrap = byId("pointsWrap");
+
   wrap.addEventListener("input", (e) => {
-    const card = e.target.closest("[data-point-id]"), k = e.target.getAttribute("data-k");
-    if (card && k) { state.points.find(x => x.id === card.dataset.pointId)[k] = e.target.value; saveCurrentFiche(); }
+    const card = e.target.closest("[data-point-id]");
+    if (!card) return;
+
+    const pid = card.getAttribute("data-point-id");
+    const p = state.points.find(x => x.id === pid);
+    if (!p) return;
+
+    const k = e.target.getAttribute("data-k");
+    if (!k) return;
+
+    p[k] = e.target.value;
+    saveState();
   });
+
   wrap.addEventListener("change", async (e) => {
     const card = e.target.closest("[data-point-id]");
-    if (card && e.target.dataset.action === "addPhotos") {
-      for (const f of e.target.files) {
-        const dataUrl = await compressImageToDataUrl(f);
-        await idbPut({ id: newId("ph"), pointId: card.dataset.pointId, dataUrl, createdAt: Date.now() });
+    if (!card) return;
+
+    const pid = card.getAttribute("data-point-id");
+    const p = state.points.find(x => x.id === pid);
+    if (!p) return;
+
+    if (e.target.getAttribute("data-action") === "addPhotos") {
+      const files = Array.from(e.target.files || []);
+      if (!files.length) return;
+
+      const MAX_PHOTOS_PER_POINT = 12;
+      const existing = await idbGetManyByPoint(pid);
+
+      if (existing.length >= MAX_PHOTOS_PER_POINT) {
+        alert("Limite atteinte : " + MAX_PHOTOS_PER_POINT + " photos max pour ce point.");
+        e.target.value = "";
+        return;
       }
-      render(); saveCurrentFiche();
+
+      let remaining = MAX_PHOTOS_PER_POINT - existing.length;
+
+      for (const f of files) {
+        if (remaining <= 0) break;
+        try {
+          const dataUrl = await compressImageToDataUrl(f, { maxW: 1280, maxH: 1280, quality: 0.75 });
+          await idbPut({ id: newId("ph"), pointId: pid, dataUrl, createdAt: Date.now() });
+          remaining--;
+        } catch (err) {
+          alert("Impossible d'ajouter une photo : " + (err?.message || err));
+        }
+      }
+
+      e.target.value = ""; // important iOS
+      await render();
+      saveState();
     }
   });
+
   wrap.addEventListener("click", async (e) => {
-    const btn = e.target.closest("button"), card = e.target.closest("[data-point-id]");
-    if (!btn || !card) return;
-    const pid = card.dataset.pointId, action = btn.dataset.action;
-    const p = state.points.find(x => x.id === pid);
-    if (action === "gps") navigator.geolocation.getCurrentPosition(pos => { p.lat = pos.coords.latitude; p.lon = pos.coords.longitude; render(); saveCurrentFiche(); });
-    if (action === "remove" && state.points.length > 1) { state.points = state.points.filter(x => x.id !== pid); render(); saveCurrentFiche(); }
-    if (action === "rmPhoto") { await idbDelete(btn.dataset.photoId); render(); }
+    const btn = e.target.closest("button");
+    if (!btn) return;
+
+    const card = btn.closest("[data-point-id]");
+    if (!card) return;
+
+    const pid = card.getAttribute("data-point-id");
+    const action = btn.getAttribute("data-action");
+
+    if (action === "gps") {
+      const p = state.points.find(x => x.id === pid);
+      if (!p) return;
+
+      if (!navigator.geolocation) {
+        alert("Géolocalisation non disponible sur ce navigateur.");
+        return;
+      }
+
+      navigator.geolocation.getCurrentPosition(
+        async (pos) => {
+          p.lat = String(pos.coords.latitude);
+          p.lon = String(pos.coords.longitude);
+          saveState();
+          await render();
+        },
+        (err) => alert("GPS indisponible. Vérifie HTTPS + autorisation Safari. Détail : " + err.message),
+        { enableHighAccuracy: true, timeout: 10000 }
+      );
+      return;
+    }
+
+    if (action === "remove") {
+      if (state.points.length === 1) {
+        alert("Il faut au moins 1 point dans la fiche.");
+        return;
+      }
+
+      const photos = await idbGetManyByPoint(pid);
+      for (const ph of photos) await idbDelete(ph.id);
+
+      state.points = state.points.filter(x => x.id !== pid);
+      saveState();
+      await render();
+      return;
+    }
+
+    if (action === "rmPhoto") {
+      const photoId = btn.getAttribute("data-photo-id");
+      if (!photoId) return;
+      await idbDelete(photoId);
+      await render();
+      saveState();
+      return;
+    }
   });
 };
 
 /* =========================
    Signatures
 ========================= */
-let sigCleanup = [];
-const setupSignaturePad = (canvasId, clearBtnId, key) => {
-  const canvas = byId(canvasId), ctx = canvas.getContext("2d");
-  ctx.lineWidth = 2; ctx.lineCap = "round";
-  if (state.chantier.signatures[key]) { const img = new Image(); img.onload = () => ctx.drawImage(img, 0, 0, canvas.width, canvas.height); img.src = state.chantier.signatures[key]; }
-  
-  let drawing = false;
-  const getPos = (ev) => {
-    const rect = canvas.getBoundingClientRect(), c = ev.touches ? ev.touches[0] : ev;
-    return { x: (c.clientX - rect.left) * (canvas.width / rect.width), y: (c.clientY - rect.top) * (canvas.height / rect.height) };
-  };
-  const start = (e) => { e.preventDefault(); drawing = true; const p = getPos(e); ctx.beginPath(); ctx.moveTo(p.x, p.y); };
-  const move = (e) => { if (drawing) { e.preventDefault(); const p = getPos(e); ctx.lineTo(p.x, p.y); ctx.stroke(); } };
-  const stop = () => { if (drawing) { drawing = false; state.chantier.signatures[key] = canvas.toDataURL(); saveCurrentFiche(); } };
+let sigCleanup = []; // pour éviter accumulation listeners
 
-  canvas.addEventListener("mousedown", start); canvas.addEventListener("mousemove", move); window.addEventListener("mouseup", stop);
-  canvas.addEventListener("touchstart", start, {passive:false}); canvas.addEventListener("touchmove", move, {passive:false}); canvas.addEventListener("touchend", stop);
-  const clear = () => { ctx.clearRect(0, 0, canvas.width, canvas.height); state.chantier.signatures[key] = ""; saveCurrentFiche(); };
-  byId(clearBtnId).addEventListener("click", clear);
-  sigCleanup.push(() => { byId(clearBtnId).removeEventListener("click", clear); window.removeEventListener("mouseup", stop); });
+const setupSignaturePad = (canvasId, clearBtnId, key) => {
+  const canvas = byId(canvasId);
+  const clearBtn = byId(clearBtnId);
+  const ctx = canvas.getContext("2d");
+  ctx.lineWidth = 2;
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+
+  // restore image
+  const existing = state.chantier.signatures?.[key];
+  if (existing) {
+    const img = new Image();
+    img.onload = () => {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+    };
+    img.src = existing;
+  } else {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+  }
+
+  let drawing = false;
+
+  const getPos = (ev) => {
+    const rect = canvas.getBoundingClientRect();
+    const clientX = ev.touches ? ev.touches[0].clientX : ev.clientX;
+    const clientY = ev.touches ? ev.touches[0].clientY : ev.clientY;
+    return {
+      x: (clientX - rect.left) * (canvas.width / rect.width),
+      y: (clientY - rect.top) * (canvas.height / rect.height)
+    };
+  };
+
+  const start = (ev) => {
+    ev.preventDefault();
+    drawing = true;
+    const p = getPos(ev);
+    ctx.beginPath();
+    ctx.moveTo(p.x, p.y);
+  };
+
+  const move = (ev) => {
+    if (!drawing) return;
+    ev.preventDefault();
+    const p = getPos(ev);
+    ctx.lineTo(p.x, p.y);
+    ctx.stroke();
+  };
+
+  const end = (ev) => {
+    if (!drawing) return;
+    ev.preventDefault();
+    drawing = false;
+    state.chantier.signatures[key] = canvas.toDataURL("image/png");
+    saveState();
+  };
+
+  const onMouseUp = (ev) => end(ev);
+
+  canvas.addEventListener("mousedown", start);
+  canvas.addEventListener("mousemove", move);
+  window.addEventListener("mouseup", onMouseUp);
+
+  canvas.addEventListener("touchstart", start, { passive:false });
+  canvas.addEventListener("touchmove", move, { passive:false });
+  canvas.addEventListener("touchend", end, { passive:false });
+
+  /* ✅ FIX IMPORTANT : éviter accumulation listeners sur bouton Effacer */
+  const onClear = () => {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    state.chantier.signatures[key] = "";
+    saveState();
+  };
+  clearBtn.addEventListener("click", onClear);
+
+  // cleanup handlers
+  sigCleanup.push(() => {
+    canvas.removeEventListener("mousedown", start);
+    canvas.removeEventListener("mousemove", move);
+    window.removeEventListener("mouseup", onMouseUp);
+    canvas.removeEventListener("touchstart", start);
+    canvas.removeEventListener("touchmove", move);
+    canvas.removeEventListener("touchend", end);
+    clearBtn.removeEventListener("click", onClear);
+  });
 };
 
-const initSignatures = (f=false) => { if(f) sigCleanup.forEach(c=>c()); sigCleanup=[]; setupSignaturePad("sigControleur", "clearSigControleur", "controleur"); setupSignaturePad("sigEntreprise", "clearSigEntreprise", "entreprise"); setupSignaturePad("sigClient", "clearSigClient", "client"); };
+const initSignatures = (force=false) => {
+  ensureSignatures();
+  if (force) {
+    sigCleanup.forEach(fn => { try { fn(); } catch {} });
+    sigCleanup = [];
+  }
+  setupSignaturePad("sigControleur", "clearSigControleur", "controleur");
+  setupSignaturePad("sigEntreprise", "clearSigEntreprise", "entreprise");
+  setupSignaturePad("sigClient", "clearSigClient", "client");
+};
 
 /* =========================
-   PDF & Share
+   PDF
 ========================= */
 const buildPdfBody = async () => {
-  const logo = await getLogoDataUrl(), c = state.chantier;
-  const rows = await Promise.all(state.points.map(async (p, i) => {
-    const phs = (await idbGetManyByPoint(p.id)).slice(0,3);
-    return `<tr><td style="border:1px solid #ddd;padding:5px">${i+1}</td><td style="border:1px solid #ddd;padding:5px"><b>${p.numero}</b></td><td style="border:1px solid #ddd;padding:5px;color:red">${p.reserves_txt}</td><td style="border:1px solid #ddd;padding:5px">${phs.map(ph=>`<img src="${ph.dataUrl}" style="height:60px;margin-right:2px">`).join("")}</td><td style="border:1px solid #ddd;padding:5px;font-size:10px">${p.repere}<br>${p.lat}, ${p.lon}</td><td style="border:1px solid #ddd;padding:5px">${p.date_reprise}</td></tr>`;
-  }));
-  return `<div style="padding:20px;font-family:sans-serif"><div style="display:flex;align-items:center;border-bottom:2px solid #000;padding-bottom:10px"><img src="${logo}" style="height:60px;margin-right:20px"><div><h3>PV Points Non Conformes</h3><p style="font-size:11px">Projet: ${c.projet} | Commune: ${c.commune} | Date: ${c.date}</p></div></div><table style="width:100%;border-collapse:collapse;margin-top:20px;font-size:11px"><thead><tr style="background:#eee"><th>#</th><th>N°</th><th>Observation</th><th>Photos</th><th>Localisation</th><th>Reprise</th></tr></thead><tbody>${rows.join("")}</tbody></table><div style="display:flex;margin-top:30px;font-size:11px">${["Contrôleur","Entreprise","Client"].map(t=>`<div style="flex:1;border:1px solid #ddd;padding:5px;margin-right:5px"><b>${t}</b><br>${c.signatures[t.toLowerCase()]?`<img src="${c.signatures[t.toLowerCase()]}" style="width:100%">`:`<div style="height:80px"></div>`}</div>`).join("")}</div></div>`;
+  const sigs = state.chantier.signatures || {};
+
+  const controleurNom =
+    state.chantier.controleur === "__autre__"
+      ? (state.chantier.controleurAutre || "")
+      : (state.chantier.controleur || "");
+
+  const poseurNom =
+    state.chantier.poseur === "__autre__"
+      ? (state.chantier.poseurAutre || "")
+      : (state.chantier.poseur || "");
+
+  const logoSrc = await getLogoDataUrl();
+
+  const rows = [];
+  for (let i = 0; i < state.points.length; i++) {
+    const p = state.points[i];
+    const photos = await idbGetManyByPoint(p.id);
+    const first3 = photos.slice(0, 3);
+
+    rows.push(`
+      <tr style="page-break-inside:avoid;">
+        <td style="border:1px solid #ddd;padding:8px;vertical-align:top;">${i + 1}</td>
+        <td style="border:1px solid #ddd;padding:8px;vertical-align:top;"><strong>${escapeHtml(p.numero)}</strong></td>
+        <td style="border:1px solid #ddd;padding:8px;vertical-align:top;background:#fee2e2;color:#991b1b;font-weight:700;">
+          ${escapeHtml(p.reserves_txt || "—")}
+        </td>
+        <td style="border:1px solid #ddd;padding:8px;vertical-align:top;">
+          <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            ${first3.map(ph => `
+              <img src="${ph.dataUrl}" alt="Photo"
+                style="height:85px;width:auto;object-fit:cover;border:1px solid #ddd;border-radius:6px;">
+            `).join("")}
+            ${(photos.length > 3) ? `<div style="font-size:11px;color:#555;align-self:center;">+${photos.length - 3}</div>` : ""}
+          </div>
+        </td>
+        <td style="border:1px solid #ddd;padding:8px;vertical-align:top;">
+          ${escapeHtml(p.repere || "")}<br>
+          <span style="font-size:11px;color:#555;">
+            ${escapeHtml(p.lat || "")} ${(p.lat && p.lon) ? " • " : ""} ${escapeHtml(p.lon || "")}
+          </span>
+        </td>
+        <td style="border:1px solid #ddd;padding:8px;vertical-align:top;white-space:nowrap;">${escapeHtml(p.date_reprise || "")}</td>
+      </tr>
+    `);
+  }
+
+  const signatureBox = (imgDataUrl) => {
+    if (imgDataUrl) {
+      return `<img src="${imgDataUrl}" style="width:100%;max-height:140px;object-fit:contain;border:1px solid #ddd;border-radius:8px;">`;
+    }
+    return `
+      <div style="width:100%;height:120px;border:2px solid #111;border-radius:8px;"></div>
+      <div style="font-size:11px;color:#555;margin-top:6px;text-align:center;">Nom / Date / Signature</div>
+    `;
+  };
+
+  return `
+    <div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;line-height:1.35;">
+      <div style="display:flex;gap:14px;align-items:center;border-bottom:2px solid #111827;padding-bottom:10px;margin-bottom:16px;">
+        <img src="${logoSrc}" alt="Logo" style="height:80px;width:auto;object-fit:contain;">
+        <div>
+          <div style="font-size:18px;font-weight:700;margin:0;">PV – Points non conformes (Réserves)</div>
+          <div style="font-size:12px;color:#555;margin-top:4px;">
+            Commune : <strong>${escapeHtml(state.chantier.commune)}</strong> |
+            Date : <strong>${escapeHtml(state.chantier.date)}</strong><br>
+            Projet : <strong>${escapeHtml(state.chantier.projet)}</strong><br>
+            Poseur : <strong>${escapeHtml(poseurNom)}</strong> |
+            Contrôleur : <strong>${escapeHtml(controleurNom)}</strong>
+          </div>
+        </div>
+      </div>
+
+      <table style="width:100%;border-collapse:collapse;font-size:12px;">
+        <thead>
+          <tr>
+            <th style="border:1px solid #ddd;padding:8px;background:#f3f4f6;text-align:left;width:4%;">#</th>
+            <th style="border:1px solid #ddd;padding:8px;background:#f3f4f6;text-align:left;width:10%;">N° point</th>
+            <th style="border:1px solid #ddd;padding:8px;background:#f3f4f6;text-align:left;width:40%;">Non-conformité / Observation</th>
+            <th style="border:1px solid #ddd;padding:8px;background:#f3f4f6;text-align:left;width:16%;">Photos</th>
+            <th style="border:1px solid #ddd;padding:8px;background:#f3f4f6;text-align:left;width:18%;">Localisation</th>
+            <th style="border:1px solid #ddd;padding:8px;background:#f3f4f6;text-align:left;width:12%;">Date de reprise</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${rows.join("")}
+        </tbody>
+      </table>
+
+      <h2 style="margin-top:16px;">Signatures</h2>
+      <table style="width:100%;border-collapse:collapse;">
+        <tr>
+          <td style="width:33%;padding:8px;border:1px solid #ddd;">
+            <strong>Contrôleur</strong><br>
+            ${signatureBox(sigs.controleur)}
+          </td>
+          <td style="width:33%;padding:8px;border:1px solid #ddd;">
+            <strong>Entreprise</strong><br>
+            ${signatureBox(sigs.entreprise)}
+          </td>
+          <td style="width:33%;padding:8px;border:1px solid #ddd;">
+            <strong>Client</strong><br>
+            ${signatureBox(sigs.client)}
+          </td>
+        </tr>
+      </table>
+    </div>
+  `;
 };
 
-const exportPDF = async (action = "save") => {
-  const missing = state.points.filter(p => !p.numero.trim());
-  if (missing.length) return alert("Numéros manquants");
-  byId("pdfLoading").style.display = "flex";
-  const container = document.createElement("div");
-  container.style.position="absolute"; container.style.left="-9999px"; container.style.width="794px";
-  container.innerHTML = await buildPdfBody(); document.body.appendChild(container);
-  await waitForImages(container);
-  const canvas = await html2canvas(container, { scale: 1.3 });
-  const { jsPDF } = window.jspdf;
-  const pdf = new jsPDF();
-  const imgData = canvas.toDataURL("image/jpeg", 0.9);
-  pdf.addImage(imgData, "JPEG", 5, 5, 200, (canvas.height*200)/canvas.width);
-  byId("pdfLoading").style.display = "none";
-  const name = `PV_${state.chantier.commune || "Chantier"}.pdf`;
-  if (action === "share") {
-    const file = new File([pdf.output("blob")], name, { type: "application/pdf" });
-    if (navigator.canShare && navigator.canShare({ files: [file] })) await navigator.share({ files: [file], title: 'PV Réception' });
-    else pdf.save(name);
-  } else pdf.save(name);
-  container.remove();
+const exportPDF = async () => {
+  let container = null;
+
+  try {
+    // 1. Validation : vérifier si tous les points ont un numéro
+    const missing = state.points
+      .map((p, i) => (!String(p.numero || "").trim() ? `Point ${i+1}` : null))
+      .filter(Boolean);
+    if (missing.length) {
+      alert("Numéro obligatoire manquant pour : " + missing.join(", "));
+      return;
+    }
+
+    // 2. Afficher l'écran de chargement
+    byId("pdfLoading").style.display = "flex";
+
+    // 3. Créer un conteneur temporaire pour générer l'image du PDF
+    container = document.createElement("div");
+    container.style.position = "absolute";
+    container.style.left = "-9999px"; // On le cache en dehors de l'écran (plus fiable que visibility: hidden)
+    container.style.top = "0";
+    container.style.width = "794px"; // Largeur approximative d'un A4
+    container.style.background = "#fff";
+    container.style.zIndex = "-1";
+
+    container.innerHTML = await buildPdfBody();
+    document.body.appendChild(container);
+
+    // Attendre que le navigateur dessine les éléments et charge les polices/images
+    await new Promise(r => requestAnimationFrame(r));
+    await new Promise(r => requestAnimationFrame(r));
+    if (document.fonts && document.fonts.ready) {
+      try { await document.fonts.ready; } catch(e) {}
+    }
+    await waitForImages(container);
+    await new Promise(r => setTimeout(r, 150));
+
+    // 4. Transformer le HTML en image (Canvas)
+    const canvas = await html2canvas(container, {
+      scale: 1.3,
+      useCORS: true,
+      allowTaint: false,
+      backgroundColor: "#ffffff",
+      logging: false,
+      imageTimeout: 20000
+    });
+
+    // 5. Construire le document PDF
+    const { jsPDF } = window.jspdf;
+    const pdf = new jsPDF({ unit: "mm", format: "a4", orientation: "portrait" });
+
+    const pdfW = pdf.internal.pageSize.getWidth();
+    const pdfH = pdf.internal.pageSize.getHeight();
+    const M = 8; // Marge en mm
+    const usableW = pdfW - 2 * M;
+    const usableH = pdfH - 2 * M;
+
+    const imgW = usableW;
+    const imgH = canvas.height * (imgW / canvas.width);
+
+    // Si ça tient sur une seule page
+    if (imgH <= usableH) {
+      const imgData = canvas.toDataURL("image/jpeg", 0.90);
+      pdf.addImage(imgData, "JPEG", M, M, imgW, imgH);
+    } else {
+      // Découpage magique pour le multi-pages
+      const pageCanvas = document.createElement("canvas");
+      const pageCtx = pageCanvas.getContext("2d");
+
+      const pageHpx = Math.floor(canvas.width * (usableH / usableW));
+      let y = 0;
+      let first = true;
+
+      while (y < canvas.height) {
+        const sliceH = Math.min(pageHpx, canvas.height - y);
+
+        pageCanvas.width = canvas.width;
+        pageCanvas.height = sliceH;
+
+        pageCtx.clearRect(0, 0, pageCanvas.width, pageCanvas.height);
+        pageCtx.drawImage(canvas, 0, y, canvas.width, sliceH, 0, 0, pageCanvas.width, sliceH);
+
+        const pageImg = pageCanvas.toDataURL("image/jpeg", 0.90);
+        const pageImgH_mm = (sliceH * imgW) / canvas.width;
+
+        if (!first) pdf.addPage();
+        first = false;
+
+        pdf.addImage(pageImg, "JPEG", M, M, imgW, pageImgH_mm);
+        y += sliceH;
+      }
+    }
+
+    // 6. Cacher l'écran de chargement
+    byId("pdfLoading").style.display = "none";
+
+    // 7. Déclencher le téléchargement propre
+    const nomCommune = state.chantier.commune ? state.chantier.commune.replace(/[^a-zA-Z0-9]/g, "_") : "Fiche";
+    const nomFichier = `PV_Reserves_${nomCommune}.pdf`;
+    
+    pdf.save(nomFichier);
+
+  } catch (e) {
+    byId("pdfLoading").style.display = "none";
+    alert("Erreur PDF : " + (e?.message || e));
+  } finally {
+    // Toujours nettoyer le conteneur à la fin
+    if (container) container.remove();
+  }
 };
 
 /* =========================
-   Main Logic
+   Buttons
 ========================= */
 const bindButtons = () => {
-  byId("addPointBtn").addEventListener("click", () => { state.points.push(defaultPoint()); render(); });
-  byId("pdfBtn").addEventListener("click", () => exportPDF("save"));
-  byId("sharePdfBtn").addEventListener("click", () => exportPDF("share"));
-  byId("resetBtn").addEventListener("click", () => { if(confirm("Vider?")) { state = emptyState(); render(); initSignatures(true); } });
+  byId("addPointBtn").addEventListener("click", async () => {
+    state.points.push(defaultPoint());
+    saveState();
+    await render();
+    window.scrollTo({ top: document.body.scrollHeight, behavior: "smooth" });
+  });
+
+  byId("pdfBtn").addEventListener("click", exportPDF);
+
+  // vider la fiche courante (sans toucher les autres fiches)
+  byId("resetBtn").addEventListener("click", async () => {
+    if (!confirm("Vider la fiche courante ? (points + photos + signatures)")) return;
+
+    // supprimer photos des points
+    for (const pt of (state.points || [])) {
+      const photos = await idbGetManyByPoint(pt.id);
+      for (const ph of photos) await idbDelete(ph.id);
+    }
+
+    // reset state
+    state = emptyState();
+
+    saveState();
+    await render();
+    initSignatures(true);
+  });
 };
 
+/* =========================
+   UI Fiches
+========================= */
 const bindFichesUI = () => {
-  byId("ficheSelect").addEventListener("change", (e) => { setCurrentFicheId(e.target.value); loadState(); render(); initSignatures(true); });
-  byId("saveFicheBtn").addEventListener("click", () => { saveCurrentFiche(); alert("Sauvé"); refreshFicheSelect(); });
-  byId("newFicheBtn").addEventListener("click", () => { const id = newId("fiche"); state = emptyState(); localStorage.setItem(ficheStorageKey(id), JSON.stringify(state)); const index = loadFichesIndex(); index.push({ id, name: "Nouvelle fiche", updatedAt: Date.now() }); saveFichesIndex(index); setCurrentFicheId(id); render(); initSignatures(true); refreshFicheSelect(); });
-  byId("dupFicheBtn").addEventListener("click", duplicateFicheWithPhotos);
-  byId("delFicheBtn").addEventListener("click", () => { const id = getCurrentFicheId(); if(confirm("Supprimer?")) { localStorage.removeItem(ficheStorageKey(id)); const index = loadFichesIndex().filter(f => f.id !== id); saveFichesIndex(index); if(index.length) setCurrentFicheId(index[0].id); loadState(); render(); initSignatures(true); refreshFicheSelect(); } });
+  const sel = byId("ficheSelect");
+
+  sel.addEventListener("change", async () => {
+    const id = sel.value;
+    if (!id) return;
+    await loadFiche(id);
+    refreshFicheSelect();
+  });
+
+  byId("saveFicheBtn").addEventListener("click", async () => {
+    saveState();
+    refreshFicheSelect();
+    alert("✅ Fiche sauvegardée");
+  });
+
+  byId("newFicheBtn").addEventListener("click", async () => {
+    const id = newId("fiche");
+    state = emptyState();
+    localStorage.setItem(ficheStorageKey(id), JSON.stringify(state));
+
+    const index = loadFichesIndex();
+    index.push({ id, name: "Nouvelle fiche", updatedAt: Date.now() });
+    saveFichesIndex(index);
+
+    setCurrentFicheId(id);
+    ensureSignatures();
+    await render();
+    initSignatures(true);
+    refreshFicheSelect();
+  });
+
+  byId("dupFicheBtn").addEventListener("click", async () => {
+    await duplicateFicheWithPhotos();
+    alert("✅ Fiche dupliquée (photos incluses)");
+  });
+
+  byId("delFicheBtn").addEventListener("click", async () => {
+    const id = getCurrentFicheId();
+    if (!id) return;
+
+    if (!confirm("Supprimer cette fiche ? (photos incluses)")) return;
+
+    // supprimer photos de cette fiche
+    try {
+      const raw = localStorage.getItem(ficheStorageKey(id));
+      if (raw) {
+        const st = JSON.parse(raw);
+        for (const pt of (st?.points || [])) {
+          const photos = await idbGetManyByPoint(pt.id);
+          for (const ph of photos) await idbDelete(ph.id);
+        }
+      }
+    } catch {}
+
+    localStorage.removeItem(ficheStorageKey(id));
+    let index = loadFichesIndex().filter(f => f.id !== id);
+    saveFichesIndex(index);
+
+    if (!index.length) {
+      state = emptyState();
+      ensureAtLeastOneFiche();
+    } else {
+      setCurrentFicheId(index[0].id);
+      await loadFiche(index[0].id);
+    }
+
+    refreshFicheSelect();
+    alert("🗑️ Fiche supprimée");
+  });
+
+  /* ✅ NEW: export/import */
+  byId("exportJsonBtn").addEventListener("click", exportCurrentFicheToJson);
+
+  const fileInput = byId("importJsonInput");
+  byId("importJsonBtn").addEventListener("click", () => fileInput.click());
+  fileInput.addEventListener("change", async () => {
+    const f = fileInput.files?.[0];
+    if (!f) return;
+    try {
+      await importFicheFromJsonFile(f);
+    } catch (e) {
+      alert("Import impossible : " + (e?.message || e));
+    } finally {
+      fileInput.value = "";
+    }
+  });
 };
 
+/* =========================
+   Init
+========================= */
 (async () => {
-  const index = loadFichesIndex();
-  if (!index.length) { const id = newId("fiche"); saveFichesIndex([{ id, name: "Fiche 1", updatedAt: Date.now() }]); setCurrentFicheId(id); }
   loadState();
-  bindChantier(); handlePointsEvents(); bindButtons(); bindFichesUI();
-  refreshFicheSelect(); await render(); initSignatures(true);
+  ensureAtLeastOneFiche();
+  ensureSignatures();
+
+  bindChantier();
+  handlePointsEvents();
+  bindButtons();
+  bindFichesUI();
+
+  refreshFicheSelect();
+  await render();
+  saveState();
+  initSignatures(true);
 })();
 </script>
 </body>
