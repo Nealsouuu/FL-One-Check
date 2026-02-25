@@ -12,7 +12,7 @@
     main { padding: 16px; max-width: 980px; margin: 0 auto; }
 
     .card { background: white; border-radius: 12px; padding: 24px; margin-bottom: 12px; box-shadow: 0 2px 10px rgba(0,0,0,.06); }
-    /* Style pour les points liés (1.1, 1.2...) */
+    /* Style pour les points liés (ex: 1.1) */
     .card.linked-point { margin-left: 35px; border-left: 6px solid #2563eb; background: #fbfcfe; }
     
     .row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
@@ -26,7 +26,7 @@
     textarea { min-height: 70px; resize: vertical; }
 
     .btnrow { display:flex; gap:10px; flex-wrap: wrap; align-items:center; }
-    .btn { cursor:pointer; border: 0; background:#111827; color:white; padding:10px 12px; border-radius:10px; width:auto; font-weight: 600;}
+    .btn { cursor:pointer; border: 0; background:#111827; color:white; padding:10px 12px; border-radius:10px; width:auto; font-weight: 500;}
     .btn.secondary { background:#374151; }
     .btn.danger { background:#b91c1c; }
     .btn.blue { background:#2563eb; }
@@ -38,8 +38,9 @@
     .small { font-size:12px; color:#6b7280; }
 
     .photos { display:flex; gap:10px; flex-wrap:wrap; margin-top:8px; }
-    .thumb { width: 120px; border:1px solid #e5e7eb; border-radius:10px; overflow:hidden; background:#fff; position: relative; }
-    .thumb img { display:block; width:100%; height:90px; object-fit:cover; }
+    .thumb { width: 110px; border:1px solid #e5e7eb; border-radius:10px; overflow:hidden; background:#fff; position: relative; }
+    .thumb img { display:block; width:100%; height:80px; object-fit:cover; }
+    .thumb div { padding: 4px; }
 
     #pdfLoading {
       position: fixed; inset: 0; background: rgba(17,24,39,.9); color: white;
@@ -129,9 +130,9 @@
       </div>
     </div>
 
-    <div class="row" style="margin-top:12px;">
+    <div class="row" style="margin-top:12px; border-top:1px solid #eee; padding-top:12px;">
       <div>
-        <label>📂 Mes fiches</label>
+        <label>📂 Mes fiches enregistrées</label>
         <select id="ficheSelect"></select>
       </div>
 
@@ -140,29 +141,27 @@
         <div class="btnrow">
           <button class="btn secondary" id="newFicheBtn" type="button">➕ Nouvelle</button>
           <button class="btn" id="saveFicheBtn" type="button">💾 Sauver</button>
-          <button class="btn secondary" id="dupFicheBtn" type="button">📄 Dupliquer</button>
+          <button class="btn secondary" id="dupFicheBtn" type="button">📄 Copier</button>
           <button class="btn danger" id="delFicheBtn" type="button">🗑️ Supprimer</button>
         </div>
       </div>
     </div>
 
-    <div class="btnrow" style="margin-top:12px;">
-      <button class="btn" id="addPointBtn" type="button">➕ Ajouter une réserve (1, 2...)</button>
+    <div class="btnrow" style="margin-top:20px; border-top: 1px solid #eee; padding-top: 20px;">
+      <button class="btn" id="addPointBtn" type="button">➕ Ajouter une réserve (Point 1, 2...)</button>
       <button class="btn secondary" id="pdfBtn" type="button">🧾 Exporter PDF</button>
       <button class="btn blue" id="sharePdfBtn" type="button">📤 Partager (Mail/WA)</button>
-      <button class="btn danger" id="resetBtn" type="button">🧽 Vider la fiche (courante)</button>
+      <button class="btn danger" id="resetBtn" type="button">🧽 Vider la fiche</button>
     </div>
   </section>
 
   <section id="pointsWrap"></section>
 
   <section class="card" id="syntheseCard">
-    <h3 style="margin:0 0 10px 0;">2) Synthèse</h3>
+    <h3 style="margin:0 0 10px 0;">2) Synthèse & Signatures</h3>
     <div id="syntheseText" class="small"></div>
 
     <hr style="border:none;border-top:1px solid #e5e7eb;margin:14px 0;">
-
-    <h4 style="margin:0 0 10px 0;">Signatures</h4>
 
     <div class="row">
       <div>
@@ -196,10 +195,8 @@
 </main>
 
 <div id="pdfLoading">
-  <div class="box">
-    <div class="spinner"></div>
-    <div>Génération du PDF…</div>
-  </div>
+  <div class="spinner"></div>
+  <div>Génération du rapport en cours…</div>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
@@ -207,9 +204,9 @@
 
 <script>
 /* =========================
-   Stockage & Helpers
+   Stockage & DB
 ========================= */
-const LS_KEY_FALLBACK = "reception_lampadaire_state_fallback_v1";
+const LS_KEY_FALLBACK = "reception_lampadaire_state_v3";
 const FICHES_INDEX_KEY = "FL_FICHES_INDEX_V1";
 const CURRENT_FICHE_KEY = "FL_CURRENT_FICHE_ID_V1";
 const DB_NAME = "reception_lampadaire_photos_v1";
@@ -236,7 +233,6 @@ const makeFicheLabel = (st) => {
   return [proj, com, d].filter(Boolean).join(" — ") || "Fiche sans nom";
 };
 
-/* ===== IndexedDB ===== */
 const openDB = () => new Promise((resolve) => {
   const req = indexedDB.open(DB_NAME, 1);
   req.onupgradeneeded = () => {
@@ -271,9 +267,9 @@ const idbDelete = async (id) => {
   return new Promise((res) => { tx.oncomplete = () => { db.close(); res(); }; });
 };
 
-/* ===== Images ===== */
+// Compression image robuste
 const compressImageToDataUrl = (file, opts = {}) => new Promise((resolve, reject) => {
-  const { maxW = 1000, maxH = 1000, quality = 0.7, mime = "image/jpeg" } = opts;
+  const { maxW = 1280, maxH = 1280, quality = 0.75, mime = "image/jpeg" } = opts;
   const img = new Image();
   const url = URL.createObjectURL(file);
   img.onload = () => {
@@ -288,7 +284,7 @@ const compressImageToDataUrl = (file, opts = {}) => new Promise((resolve, reject
   };
   img.onerror = () => reject();
   img.src = url;
-};
+}); // <-- L'ERREUR DE PARENTHÈSE ÉTAIT ICI
 
 const waitForImages = (root) => {
   const imgs = Array.from(root.querySelectorAll("img"));
@@ -312,7 +308,7 @@ const getLogoDataUrl = async () => {
 };
 
 /* =========================
-   State & Fiches Logic
+   Données (State)
 ========================= */
 const defaultPoint = (parentId = null) => ({ 
   id: newId("pt"), 
@@ -392,7 +388,7 @@ const duplicateFicheWithPhotos = async () => {
 };
 
 /* =========================
-   Render & UI
+   Render HTML
 ========================= */
 const renderPoint = (p, label, photos) => {
   const isChild = p.parentId !== null;
@@ -402,25 +398,30 @@ const renderPoint = (p, label, photos) => {
       <div><strong>RÉSERVE ${label}</strong> <span class="pill bad">Non conforme</span></div>
       <div class="btnrow">
         <button class="btn secondary" type="button" data-action="gps">📍 GPS</button>
-        ${!isChild ? `<button class="btn blue" type="button" data-action="add-linked">➕ Luminaire lié</button>` : ''}
-        <button class="btn danger" type="button" data-action="remove">🗑️</button>
+        ${!isChild ? `<button class="btn blue" type="button" data-action="add-linked">➕ Doubler (ex: 1.1)</button>` : ''}
+        <button class="btn danger" type="button" data-action="remove">🗑️ Supprimer</button>
       </div>
     </div>
     <div class="row" style="margin-top:12px;">
       <div><label>N° point lumineux</label><input style="${p.numero?'':'border:2px solid #ef4444'}" value="${escapeHtml(p.numero)}" data-k="numero" /></div>
       <div><label>Adresse / repère</label><input value="${escapeHtml(p.repere)}" data-k="repere" /></div>
-      <div><label>Lat</label><input value="${escapeHtml(p.lat)}" data-k="lat" readonly /></div>
-      <div><label>Lon</label><input value="${escapeHtml(p.lon)}" data-k="lon" readonly /></div>
+      <div><label>Latitude</label><input value="${escapeHtml(p.lat)}" data-k="lat" readonly /></div>
+      <div><label>Longitude</label><input value="${escapeHtml(p.lon)}" data-k="lon" readonly /></div>
     </div>
     <div class="row" style="margin-top:12px;">
       <div><label>Date de reprise</label><input type="date" value="${escapeHtml(p.date_reprise)}" data-k="date_reprise" /></div>
     </div>
-    <h4 style="margin:14px 0 8px 0;">Commentaire</h4>
+    <h4 style="margin:14px 0 8px 0;">Commentaire / Anomalie</h4>
     <textarea data-k="reserves_txt">${escapeHtml(p.reserves_txt)}</textarea>
     <h4 style="margin:14px 0 8px 0;">Photos</h4>
     <input type="file" accept="image/*" multiple data-action="addPhotos" />
     <div class="photos">
-      ${photos.map(ph => `<div class="thumb"><img src="${ph.dataUrl}" /><div><button class="btn danger" style="padding:4px;width:100%;font-size:10px;" data-action="rmPhoto" data-photo-id="${ph.id}">Suppr.</button></div></div>`).join("")}
+      ${photos.map(ph => `
+        <div class="thumb">
+          <img src="${ph.dataUrl}" />
+          <div><button class="btn danger" style="padding:4px 8px; font-size:11px; width:100%" data-action="rmPhoto" data-photo-id="${ph.id}">Suppr.</button></div>
+        </div>
+      `).join("")}
     </div>
   </section>`;
 };
@@ -447,11 +448,11 @@ const render = async () => {
     }
   }
   byId("pointsWrap").innerHTML = chunks.join("");
-  byId("syntheseText").innerHTML = `Points non conformes : <strong>${state.points.length}</strong>`;
+  byId("syntheseText").innerHTML = `Nombre total de points non conformes : <strong>${state.points.length}</strong>`;
 };
 
 /* =========================
-   Event Binding
+   Bind Events
 ========================= */
 const bindChantier = () => {
   ["projet","commune","zone","date","poseur","chef","controleur"].forEach(id => {
@@ -479,6 +480,7 @@ const handlePointsEvents = () => {
         const dataUrl = await compressImageToDataUrl(f);
         await idbPut({ id: newId("ph"), pointId: card.dataset.pointId, dataUrl, createdAt: Date.now() });
       }
+      e.target.value = "";
       render(); saveCurrentFiche();
     }
   });
@@ -492,7 +494,7 @@ const handlePointsEvents = () => {
             const p = state.points.find(x => x.id === pid);
             if(p) { p.lat = pos.coords.latitude.toFixed(6); p.lon = pos.coords.longitude.toFixed(6); }
             render(); saveCurrentFiche(); 
-        });
+        }, err => alert("Erreur GPS. Activez la localisation."));
     }
 
     if (action === "add-linked") {
@@ -503,7 +505,7 @@ const handlePointsEvents = () => {
     }
 
     if (action === "remove") { 
-        if(confirm("Supprimer ce point ?")) {
+        if(confirm("Supprimer ce point et ses photos ?")) {
             state.points = state.points.filter(x => x.id !== pid && x.parentId !== pid); 
             render(); saveCurrentFiche(); 
         }
@@ -532,12 +534,9 @@ const setupSignaturePad = (canvasId, clearBtnId, key) => {
   const getPos = (ev) => {
     const rect = canvas.getBoundingClientRect();
     const c = ev.touches ? ev.touches[0] : ev;
-    return { 
-        x: (c.clientX - rect.left) * (canvas.width / rect.width), 
-        y: (c.clientY - rect.top) * (canvas.height / rect.height) 
-    };
+    return { x: (c.clientX - rect.left) * (canvas.width / rect.width), y: (c.clientY - rect.top) * (canvas.height / rect.height) };
   };
-  const start = (e) => { e.preventDefault(); drawing = true; const p = getPos(e); ctx.beginPath(); ctx.moveTo(p.x, p.y); };
+  const start = (e) => { e.preventDefault(); drawing = true; ctx.beginPath(); const p = getPos(e); ctx.moveTo(p.x, p.y); };
   const move = (e) => { if (drawing) { e.preventDefault(); const p = getPos(e); ctx.lineTo(p.x, p.y); ctx.stroke(); } };
   const stop = () => { if (drawing) { drawing = false; state.chantier.signatures[key] = canvas.toDataURL(); saveCurrentFiche(); } };
 
@@ -546,11 +545,7 @@ const setupSignaturePad = (canvasId, clearBtnId, key) => {
   
   const clear = () => { ctx.clearRect(0, 0, canvas.width, canvas.height); state.chantier.signatures[key] = ""; saveCurrentFiche(); };
   byId(clearBtnId).addEventListener("click", clear);
-  
-  sigCleanup.push(() => { 
-      byId(clearBtnId).removeEventListener("click", clear); 
-      window.removeEventListener("mouseup", stop); 
-  });
+  sigCleanup.push(() => { byId(clearBtnId).removeEventListener("click", clear); window.removeEventListener("mouseup", stop); });
 };
 
 const initSignatures = (f=false) => { 
@@ -562,10 +557,10 @@ const initSignatures = (f=false) => {
 };
 
 /* =========================
-   PDF & Share
+   PDF MULTI-PAGES & Share
 ========================= */
 const buildPdfBody = async () => {
-  const logo = await getLogoDataUrl();
+  const logoSrc = await getLogoDataUrl();
   const c = state.chantier;
   const sigs = state.chantier.signatures || {};
   
@@ -579,14 +574,14 @@ const buildPdfBody = async () => {
     
     rowsHtml += `
     <tr style="page-break-inside:avoid;">
-      <td style="border:1px solid #ddd;padding:8px;">${mNum}</td>
-      <td style="border:1px solid #ddd;padding:8px;"><strong>${escapeHtml(m.numero)}</strong></td>
-      <td style="border:1px solid #ddd;padding:8px;background:#fee2e2;color:#991b1b;font-weight:700;">${escapeHtml(m.reserves_txt)}</td>
-      <td style="border:1px solid #ddd;padding:8px;">
-        <div style="display:flex;gap:5px;">${mPhotos.slice(0,3).map(ph=>`<img src="${ph.dataUrl}" style="height:70px;border-radius:4px;">`).join("")}</div>
+      <td style="border:1px solid #ddd;padding:8px;vertical-align:top;">${mNum}</td>
+      <td style="border:1px solid #ddd;padding:8px;vertical-align:top;"><strong>${escapeHtml(m.numero)}</strong></td>
+      <td style="border:1px solid #ddd;padding:8px;vertical-align:top;background:#fee2e2;color:#991b1b;font-weight:700;">${escapeHtml(m.reserves_txt)}</td>
+      <td style="border:1px solid #ddd;padding:8px;vertical-align:top;">
+        <div style="display:flex;gap:5px;flex-wrap:wrap;">${mPhotos.slice(0,3).map(ph=>`<img src="${ph.dataUrl}" style="height:75px;border:1px solid #ddd;border-radius:4px;object-fit:cover;">`).join("")}</div>
       </td>
-      <td style="border:1px solid #ddd;padding:8px;font-size:11px;">${escapeHtml(m.repere)}<br>${m.lat}, ${m.lon}</td>
-      <td style="border:1px solid #ddd;padding:8px;">${m.date_reprise}</td>
+      <td style="border:1px solid #ddd;padding:8px;vertical-align:top;font-size:11px;">${escapeHtml(m.repere)}<br>${m.lat}, ${m.lon}</td>
+      <td style="border:1px solid #ddd;padding:8px;vertical-align:top;">${m.date_reprise}</td>
     </tr>`;
 
     const linked = state.points.filter(p => p.parentId === m.id);
@@ -595,28 +590,28 @@ const buildPdfBody = async () => {
       const sPhotos = await idbGetManyByPoint(s.id);
       rowsHtml += `
       <tr style="page-break-inside:avoid; background:#f9fafb;">
-        <td style="border:1px solid #ddd;padding:8px;color:#2563eb;">${mNum}.${j+1}</td>
-        <td style="border:1px solid #ddd;padding:8px;"><strong>${escapeHtml(s.numero)}</strong></td>
-        <td style="border:1px solid #ddd;padding:8px;">${escapeHtml(s.reserves_txt)}</td>
-        <td style="border:1px solid #ddd;padding:8px;">
-          <div style="display:flex;gap:5px;">${sPhotos.slice(0,3).map(ph=>`<img src="${ph.dataUrl}" style="height:70px;border-radius:4px;">`).join("")}</div>
+        <td style="border:1px solid #ddd;padding:8px;vertical-align:top;color:#2563eb;font-weight:bold;padding-left:15px;">${mNum}.${j+1}</td>
+        <td style="border:1px solid #ddd;padding:8px;vertical-align:top;"><strong>${escapeHtml(s.numero)}</strong></td>
+        <td style="border:1px solid #ddd;padding:8px;vertical-align:top;">${escapeHtml(s.reserves_txt)}</td>
+        <td style="border:1px solid #ddd;padding:8px;vertical-align:top;">
+          <div style="display:flex;gap:5px;flex-wrap:wrap;">${sPhotos.slice(0,3).map(ph=>`<img src="${ph.dataUrl}" style="height:75px;border:1px solid #ddd;border-radius:4px;object-fit:cover;">`).join("")}</div>
         </td>
-        <td style="border:1px solid #ddd;padding:8px;font-size:11px;">${escapeHtml(s.repere)}<br>${s.lat}, ${s.lon}</td>
-        <td style="border:1px solid #ddd;padding:8px;">${s.date_reprise}</td>
+        <td style="border:1px solid #ddd;padding:8px;vertical-align:top;font-size:11px;">${escapeHtml(s.repere)}<br>${s.lat}, ${s.lon}</td>
+        <td style="border:1px solid #ddd;padding:8px;vertical-align:top;">${s.date_reprise}</td>
       </tr>`;
     }
   }
 
   return `
-  <div style="padding:20px;font-family:sans-serif">
-    <div style="display:flex;align-items:center;border-bottom:2px solid #111827;padding-bottom:10px;margin-bottom:20px;">
-      <img src="${logo}" style="height:80px;margin-right:20px;">
+  <div style="padding:10px;font-family:system-ui,-apple-system,sans-serif;">
+    <div style="display:flex;gap:14px;align-items:center;border-bottom:2px solid #111827;padding-bottom:10px;margin-bottom:16px;">
+      <img src="${logoSrc}" style="height:90px;object-fit:contain;">
       <div>
         <h2 style="margin:0;">PV – Points non conformes (Réserves)</h2>
-        <p style="font-size:12px;margin:5px 0;">Projet: <b>${c.projet}</b> | Commune: <b>${c.commune}</b> | Date: <b>${c.date}</b></p>
+        <p style="font-size:12px;color:#555;margin:4px 0;">Projet: <b>${escapeHtml(c.projet)}</b> | Commune: <b>${escapeHtml(c.commune)}</b> | Date: <b>${escapeHtml(c.date)}</b></p>
       </div>
     </div>
-    <table style="width:100%;border-collapse:collapse;margin-top:20px;font-size:11px">
+    <table style="width:100%;border-collapse:collapse;font-size:12px;">
       <thead><tr style="background:#f3f4f6">
         <th style="border:1px solid #ddd;padding:8px;text-align:left;">#</th>
         <th style="border:1px solid #ddd;padding:8px;text-align:left;">N° Lum.</th>
@@ -627,40 +622,86 @@ const buildPdfBody = async () => {
       </tr></thead>
       <tbody>${rowsHtml}</tbody>
     </table>
-    <div style="display:flex;margin-top:30px;gap:10px;">
+    <div style="display:flex;margin-top:20px;gap:15px;page-break-inside:avoid;">
       ${["Contrôleur","Entreprise","Client"].map(t=>`
-        <div style="flex:1;border:1px solid #ddd;padding:10px;">
+        <div style="flex:1;border:1px solid #ddd;padding:10px;text-align:center;">
           <b>${t}</b><br>
-          ${sigs[t.toLowerCase()]?`<img src="${sigs[t.toLowerCase()]}" style="width:100%;max-height:120px;object-fit:contain;">`:`<div style="height:80px"></div>`}
+          ${sigs[t.toLowerCase()]?`<img src="${sigs[t.toLowerCase()]}" style="width:100%;max-height:120px;object-fit:contain;">`:`<div style="height:100px;border:1px dashed #ccc;margin-top:5px;"></div>`}
         </div>`).join("")}
     </div>
   </div>`;
 };
 
 const exportPDF = async (action = "save") => {
-  if (state.points.some(p => !p.numero.trim())) return alert("Veuillez saisir le N° de luminaire pour tous les points.");
+  if (state.points.some(p => !p.numero.trim())) {
+      alert("⚠️ Le N° de point lumineux est obligatoire pour générer le PDF !");
+      return;
+  }
   
   byId("pdfLoading").style.display = "flex";
+  
   const container = document.createElement("div");
   container.style.position="absolute"; container.style.left="-9999px"; container.style.width="794px";
-  container.innerHTML = await buildPdfBody(); document.body.appendChild(container);
+  container.style.background = "#fff";
   
+  container.innerHTML = await buildPdfBody(); 
+  document.body.appendChild(container);
+  
+  await new Promise(r => requestAnimationFrame(r));
+  await new Promise(r => requestAnimationFrame(r));
   await waitForImages(container);
-  const canvas = await html2canvas(container, { scale: 1.5 });
+  await new Promise(r => setTimeout(r, 200));
+
+  const canvas = await html2canvas(container, { scale: 1.3, useCORS: true, backgroundColor: "#ffffff" });
   const { jsPDF } = window.jspdf;
   const pdf = new jsPDF({ unit: "mm", format: "a4", orientation: "portrait" });
   
   const pdfW = pdf.internal.pageSize.getWidth();
-  const pdfH = (canvas.height * pdfW) / canvas.width;
-  pdf.addImage(canvas.toDataURL("image/jpeg", 0.9), "JPEG", 0, 0, pdfW, pdfH);
+  const pdfH = pdf.internal.pageSize.getHeight();
+  const M = 8;
+  const usableW = pdfW - 2 * M;
+  const usableH = pdfH - 2 * M;
+
+  const imgW = usableW;
+  const imgH = canvas.height * (imgW / canvas.width);
+
+  // LOGIQUE DE DÉCOUPAGE MULTI-PAGES D'ORIGINE
+  if (imgH <= usableH) {
+    pdf.addImage(canvas.toDataURL("image/jpeg", 0.90), "JPEG", M, M, imgW, imgH);
+  } else {
+    const pageCanvas = document.createElement("canvas");
+    const pageCtx = pageCanvas.getContext("2d");
+    const pageHpx = Math.floor(canvas.width * (usableH / usableW));
+    let y = 0; let first = true;
+
+    while (y < canvas.height) {
+      const sliceH = Math.min(pageHpx, canvas.height - y);
+      pageCanvas.width = canvas.width;
+      pageCanvas.height = sliceH;
+      pageCtx.clearRect(0, 0, pageCanvas.width, pageCanvas.height);
+      pageCtx.drawImage(canvas, 0, y, canvas.width, sliceH, 0, 0, pageCanvas.width, sliceH);
+
+      const pageImg = pageCanvas.toDataURL("image/jpeg", 0.90);
+      const pageImgH_mm = (sliceH * imgW) / canvas.width;
+
+      if (!first) pdf.addPage();
+      first = false;
+      pdf.addImage(pageImg, "JPEG", M, M, imgW, pageImgH_mm);
+      y += sliceH;
+    }
+  }
   
   byId("pdfLoading").style.display = "none";
-  const name = `PV_${state.chantier.commune || "Chantier"}.pdf`;
+  const name = `PV_Reserves_${state.chantier.commune ? state.chantier.commune.replace(/[^a-zA-Z0-9]/g, "_") : "Chantier"}.pdf`;
   
   if (action === "share") {
     const file = new File([pdf.output("blob")], name, { type: "application/pdf" });
-    if (navigator.canShare && navigator.canShare({ files: [file] })) await navigator.share({ files: [file], title: 'PV Réception' });
-    else pdf.save(name);
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({ files: [file], title: 'PV Réception - Réserves' });
+    } else {
+        alert("Partage natif indisponible, téléchargement du fichier à la place.");
+        pdf.save(name);
+    }
   } else {
     pdf.save(name);
   }
@@ -668,43 +709,32 @@ const exportPDF = async (action = "save") => {
 };
 
 /* =========================
-   Main Logic
+   UI Setup & Boutons
 ========================= */
 const bindButtons = () => {
-  byId("addPointBtn").addEventListener("click", () => { state.points.push(defaultPoint()); render(); saveCurrentFiche(); });
+  byId("addPointBtn").addEventListener("click", () => { state.points.push(defaultPoint()); render(); saveCurrentFiche(); window.scrollTo({top:document.body.scrollHeight, behavior:'smooth'}); });
   byId("pdfBtn").addEventListener("click", () => exportPDF("save"));
   byId("sharePdfBtn").addEventListener("click", () => exportPDF("share"));
-  byId("resetBtn").addEventListener("click", () => { if(confirm("Vider la fiche courante ?")) { state = emptyState(); render(); initSignatures(true); saveCurrentFiche(); } });
+  byId("resetBtn").addEventListener("click", () => { if(confirm("Attention : Vider la fiche courante supprimera tous les points ! Continuer ?")) { state = emptyState(); render(); initSignatures(true); saveCurrentFiche(); } });
 };
 
 const bindFichesUI = () => {
   const sel = byId("ficheSelect");
   sel.addEventListener("change", (e) => { setCurrentFicheId(e.target.value); loadState(); render(); initSignatures(true); });
-  byId("saveFicheBtn").addEventListener("click", () => { saveCurrentFiche(); alert("Fiche sauvegardée"); refreshFicheSelect(); });
+  byId("saveFicheBtn").addEventListener("click", () => { saveCurrentFiche(); alert("Fiche sauvegardée avec succès."); refreshFicheSelect(); });
   byId("newFicheBtn").addEventListener("click", () => { 
-      const id = newId("fiche"); 
-      state = emptyState(); 
-      localStorage.setItem(ficheStorageKey(id), JSON.stringify(state)); 
-      const index = loadFichesIndex(); 
-      index.push({ id, name: "Nouvelle fiche", updatedAt: Date.now() }); 
-      saveFichesIndex(index); 
-      setCurrentFicheId(id); 
-      render(); 
-      initSignatures(true); 
-      refreshFicheSelect(); 
+      const id = newId("fiche"); state = emptyState(); localStorage.setItem(ficheStorageKey(id), JSON.stringify(state)); 
+      const index = loadFichesIndex(); index.push({ id, name: "Nouvelle fiche", updatedAt: Date.now() }); saveFichesIndex(index); 
+      setCurrentFicheId(id); render(); initSignatures(true); refreshFicheSelect(); 
   });
   byId("dupFicheBtn").addEventListener("click", duplicateFicheWithPhotos);
   byId("delFicheBtn").addEventListener("click", () => { 
       const id = getCurrentFicheId(); 
-      if(confirm("Supprimer cette fiche ?")) { 
+      if(confirm("Supprimer définitivement cette fiche et ses photos ?")) { 
           localStorage.removeItem(ficheStorageKey(id)); 
-          const index = loadFichesIndex().filter(f => f.id !== id); 
-          saveFichesIndex(index); 
+          const index = loadFichesIndex().filter(f => f.id !== id); saveFichesIndex(index); 
           if(index.length) setCurrentFicheId(index[0].id); 
-          loadState(); 
-          render(); 
-          initSignatures(true); 
-          refreshFicheSelect(); 
+          loadState(); render(); initSignatures(true); refreshFicheSelect(); 
       } 
   });
 };
@@ -712,9 +742,7 @@ const bindFichesUI = () => {
 (async () => {
   const index = loadFichesIndex();
   if (!index.length) { 
-      const id = newId("fiche"); 
-      saveFichesIndex([{ id, name: "Fiche 1", updatedAt: Date.now() }]); 
-      setCurrentFicheId(id); 
+      const id = newId("fiche"); saveFichesIndex([{ id, name: "Fiche 1", updatedAt: Date.now() }]); setCurrentFicheId(id); 
   }
   loadState();
   bindChantier(); handlePointsEvents(); bindButtons(); bindFichesUI();
