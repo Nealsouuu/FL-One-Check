@@ -56,22 +56,39 @@
 <body>
 <header>
   <div style="max-width:980px;margin:0 auto; display:flex; align-items:center; gap:14px;">
-    <img src="logo.png" alt="Logo" style="height:48px; object-fit:contain;" />
+    <img src="logo.png" alt="Logo entreprise" style="height:48px; object-fit:contain;" />
     <div>
       <div style="font-weight:700;">Réception de chantier</div>
-      <div class="small">PV des points non conformes - V3 Hiérarchisée</div>
+      <div class="small">Fiche des points non conformes</div>
     </div>
   </div>
 </header>
 
 <main>
-  <section class="card">
+  <section class="card" id="chantierCard">
     <h3 style="margin:0 0 10px 0;">1) Infos chantier</h3>
+
     <div class="row">
-      <div><label>Projet / Affaire</label><input id="projet" placeholder="Ex: EP - Commune X" /></div>
-      <div><label>Commune</label><input id="commune" placeholder="Ex: Nérac" /></div>
-      <div><label>Adresse / Zone</label><input id="zone" placeholder="Quartier..." /></div>
-      <div><label>Date</label><input id="date" type="date" /></div>
+      <div>
+        <label>Projet / Affaire</label>
+        <input id="projet" placeholder="Ex: EP - Commune X - 2026" />
+      </div>
+
+      <div>
+        <label>Commune</label>
+        <input id="commune" placeholder="Ex: Nérac" />
+      </div>
+
+      <div>
+        <label>Adresse / Zone</label>
+        <input id="zone" placeholder="Ex: Rue X" />
+      </div>
+
+      <div>
+        <label>Date</label>
+        <input id="date" type="date" />
+      </div>
+
       <div>
         <label>Poseur</label>
         <select id="poseur">
@@ -83,8 +100,17 @@
           <option value="__autre__">Autre…</option>
         </select>
       </div>
-      <div id="poseurAutreWrap" style="display:none;"><label>Nom du poseur</label><input id="poseurAutre" /></div>
-      <div><label>Chef d’équipe</label><input id="chef" /></div>
+
+      <div id="poseurAutreWrap" style="display:none;">
+        <label>Nom du poseur</label>
+        <input id="poseurAutre" placeholder="Saisir le nom" />
+      </div>
+
+      <div>
+        <label>Chef d’équipe</label>
+        <input id="chef" placeholder="Nom" />
+      </div>
+
       <div>
         <label>Contrôleur</label>
         <select id="controleur">
@@ -96,343 +122,603 @@
           <option value="__autre__">Autre…</option>
         </select>
       </div>
-      <div id="controleurAutreWrap" style="display:none;"><label>Nom du contrôleur</label><input id="controleurAutre" /></div>
-    </div>
 
-    <div class="row" style="margin-top:20px; border-top:1px solid #eee; padding-top:15px;">
-      <div><label>📂 Mes fiches enregistrées</label><select id="ficheSelect"></select></div>
-      <div class="btnrow" style="align-self: flex-end;">
-        <button class="btn secondary" id="newFicheBtn">➕ Nouvelle</button>
-        <button class="btn" id="saveFicheBtn">💾 Sauver</button>
-        <button class="btn secondary" id="dupFicheBtn">📄 Copier</button>
-        <button class="btn danger" id="delFicheBtn">🗑️ Suppr.</button>
+      <div id="controleurAutreWrap" style="display:none;">
+        <label>Nom du contrôleur</label>
+        <input id="controleurAutre" placeholder="Saisir le nom" />
       </div>
     </div>
 
-    <div class="btnrow" style="margin-top:20px; border-top: 1px solid #eee; padding-top: 20px;">
-      <button class="btn" id="addPointBtn" style="background:#111827;">➕ Nouvelle réserve (1, 2...)</button>
-      <button class="btn secondary" id="pdfBtn">🧾 Exporter PDF</button>
-      <button class="btn blue" id="sharePdfBtn">📤 Partager (Mail/WhatsApp)</button>
-      <button class="btn danger" id="resetBtn">🧽 Vider la fiche</button>
+    <div class="row" style="margin-top:12px;">
+      <div>
+        <label>📂 Mes fiches</label>
+        <select id="ficheSelect"></select>
+      </div>
+
+      <div>
+        <label>Actions fiche</label>
+        <div class="btnrow">
+          <button class="btn secondary" id="newFicheBtn" type="button">➕ Nouvelle</button>
+          <button class="btn" id="saveFicheBtn" type="button">💾 Sauver</button>
+          <button class="btn secondary" id="dupFicheBtn" type="button">📄 Dupliquer</button>
+          <button class="btn danger" id="delFicheBtn" type="button">🗑️ Supprimer</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="btnrow" style="margin-top:12px;">
+      <button class="btn" id="addPointBtn" type="button">➕ Ajouter une réserve (1, 2...)</button>
+      <button class="btn secondary" id="pdfBtn" type="button">🧾 Exporter PDF</button>
+      <button class="btn blue" id="sharePdfBtn" type="button">📤 Partager (Mail/WA)</button>
+      <button class="btn danger" id="resetBtn" type="button">🧽 Vider la fiche (courante)</button>
     </div>
   </section>
 
-  <div id="pointsWrap"></div>
+  <section id="pointsWrap"></section>
 
-  <section class="card">
-    <h3 style="margin:0 0 10px 0;">2) Signatures</h3>
-    <div id="syntheseText" class="small" style="margin-bottom:15px; font-weight: bold; color: #111827;"></div>
+  <section class="card" id="syntheseCard">
+    <h3 style="margin:0 0 10px 0;">2) Synthèse</h3>
+    <div id="syntheseText" class="small"></div>
+
+    <hr style="border:none;border-top:1px solid #e5e7eb;margin:14px 0;">
+
+    <h4 style="margin:0 0 10px 0;">Signatures</h4>
+
     <div class="row">
       <div>
         <label>Contrôleur</label>
-        <canvas id="sigControleur" width="400" height="150" style="border:1px solid #ddd; background:#fff; width:100%; border-radius:10px; touch-action:none;"></canvas>
-        <button class="btn danger" id="clearSigControleur" style="margin-top:5px; padding:5px 10px; font-size:12px;">Effacer</button>
+        <canvas id="sigControleur" width="420" height="160"
+          style="border:1px solid #d1d5db;border-radius:10px;background:#fff; touch-action:none;"></canvas>
+        <div class="btnrow" style="margin-top:8px;">
+          <button class="btn danger" type="button" id="clearSigControleur">Effacer</button>
+        </div>
       </div>
+
       <div>
-        <label>Entreprise (Poseur)</label>
-        <canvas id="sigEntreprise" width="400" height="150" style="border:1px solid #ddd; background:#fff; width:100%; border-radius:10px; touch-action:none;"></canvas>
-        <button class="btn danger" id="clearSigEntreprise" style="margin-top:5px; padding:5px 10px; font-size:12px;">Effacer</button>
+        <label>Entreprise</label>
+        <canvas id="sigEntreprise" width="420" height="160"
+          style="border:1px solid #d1d5db;border-radius:10px;background:#fff; touch-action:none;"></canvas>
+        <div class="btnrow" style="margin-top:8px;">
+          <button class="btn danger" type="button" id="clearSigEntreprise">Effacer</button>
+        </div>
       </div>
+
       <div>
-        <label>Client (Mairie/Syndicat)</label>
-        <canvas id="sigClient" width="400" height="150" style="border:1px solid #ddd; background:#fff; width:100%; border-radius:10px; touch-action:none;"></canvas>
-        <button class="btn danger" id="clearSigClient" style="margin-top:5px; padding:5px 10px; font-size:12px;">Effacer</button>
+        <label>Client</label>
+        <canvas id="sigClient" width="420" height="160"
+          style="border:1px solid #d1d5db;border-radius:10px;background:#fff; touch-action:none;"></canvas>
+        <div class="btnrow" style="margin-top:8px;">
+          <button class="btn danger" type="button" id="clearSigClient">Effacer</button>
+        </div>
       </div>
     </div>
   </section>
 </main>
 
-<div id="pdfLoading"><div class="spinner"></div><div>Génération du rapport...</div></div>
+<div id="pdfLoading">
+  <div class="box">
+    <div class="spinner"></div>
+    <div>Génération du PDF…</div>
+  </div>
+</div>
 
 <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
 
 <script>
 /* =========================
-   1. BASES ET STOCKAGE
+   Stockage & Helpers
 ========================= */
-const DB_NAME = "CHANTIER_SOLAIRE_V3", DB_STORE = "PHOTOS";
+const LS_KEY_FALLBACK = "reception_lampadaire_state_fallback_v1";
+const FICHES_INDEX_KEY = "FL_FICHES_INDEX_V1";
+const CURRENT_FICHE_KEY = "FL_CURRENT_FICHE_ID_V1";
+const DB_NAME = "reception_lampadaire_photos_v1";
+const DB_STORE = "photos";
+
 const byId = (id) => document.getElementById(id);
-const newId = (p="id") => `${p}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2,8)}`;
-const escapeHtml = (s) => String(s||"").replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":"&#039;"}[m]));
+const ficheStorageKey = (id) => `FL_FICHE_${id}`;
+const newId = (prefix="id") => `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2,8)}`;
 
-const openDB = () => new Promise(res => {
+const todayISO = () => {
+  const d = new Date();
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+};
+
+function escapeHtml(str){
+  return String(str ?? "").replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"',"&quot;").replaceAll("'","&#039;");
+}
+
+const makeFicheLabel = (st) => {
+  const proj = (st?.chantier?.projet || "").trim();
+  const com = (st?.chantier?.commune || "").trim();
+  const d = (st?.chantier?.date || "").trim();
+  return [proj, com, d].filter(Boolean).join(" — ") || "Fiche sans nom";
+};
+
+/* ===== IndexedDB ===== */
+const openDB = () => new Promise((resolve) => {
   const req = indexedDB.open(DB_NAME, 1);
-  req.onupgradeneeded = () => { 
-    const db = req.result; 
-    if(!db.objectStoreNames.contains(DB_STORE)) db.createObjectStore(DB_STORE, {keyPath:"id"}).createIndex("pointId","pointId");
+  req.onupgradeneeded = () => {
+    const db = req.result;
+    if (!db.objectStoreNames.contains(DB_STORE)) {
+      const store = db.createObjectStore(DB_STORE, { keyPath: "id" });
+      store.createIndex("pointId", "pointId", { unique:false });
+    }
   };
-  req.onsuccess = () => res(req.result);
+  req.onsuccess = () => resolve(req.result);
 });
 
-const idbPut = async (o) => { const db = await openDB(); const tx = db.transaction(DB_STORE,"readwrite"); tx.objectStore(DB_STORE).put(o); return new Promise(r => tx.oncomplete = r); };
-const idbGetPhotos = async (pid) => { const db = await openDB(); const req = db.transaction(DB_STORE).objectStore(DB_STORE).index("pointId").getAll(pid); return new Promise(r => req.onsuccess = () => r(req.result)); };
-const idbDel = async (id) => { const db = await openDB(); const tx = db.transaction(DB_STORE,"readwrite"); tx.objectStore(DB_STORE).delete(id); return new Promise(r => tx.oncomplete = r); };
-
-const compressImg = (file) => new Promise((res) => {
-  const reader = new FileReader();
-  reader.onload = (e) => {
-    const img = new Image();
-    img.onload = () => {
-      const canvas = document.createElement("canvas");
-      const max = 1000;
-      let w = img.width, h = img.height;
-      if (w > h && w > max) { h *= max/w; w = max; } else if (h > max) { w *= max/h; h = max; }
-      canvas.width = w; canvas.height = h;
-      canvas.getContext("2d").drawImage(img, 0, 0, w, h);
-      res(canvas.toDataURL("image/jpeg", 0.7));
-    };
-    img.src = e.target.result;
-  };
-  reader.readAsDataURL(file);
-});
-
-/* =========================
-   2. LOGIQUE DES POINTS
-========================= */
-const defaultPoint = (parent = null) => ({
-  id: newId("pt"), numero: "", repere: "", lat: "", lon: "", reserves_txt: "", date_reprise: "", parentId: parent
-});
-
-let state = { 
-  chantier: { projet:"", commune:"", zone:"", date:new Date().toISOString().split('T')[0], poseur:"", poseurAutre:"", chef:"", controleur:"", controleurAutre:"", signatures:{} }, 
-  points: [defaultPoint()] 
+const idbPut = async (obj) => {
+  const db = await openDB();
+  const tx = db.transaction(DB_STORE, "readwrite");
+  tx.objectStore(DB_STORE).put(obj);
+  return new Promise((res) => { tx.oncomplete = () => { db.close(); res(); }; });
 };
 
-const autoSave = () => {
-  const curId = localStorage.getItem("FL_CUR") || "default";
-  localStorage.setItem(`FICHE_${curId}`, JSON.stringify(state));
-  const idx = JSON.parse(localStorage.getItem("FL_IDX") || "[]");
-  const name = `${state.chantier.projet || 'Nouveau'} - ${state.chantier.commune || ''}`;
-  const nextIdx = idx.find(f => f.id === curId) ? idx.map(f => f.id === curId ? {...f, name, up:Date.now()} : f) : [...idx, {id:curId, name, up:Date.now()}];
-  localStorage.setItem("FL_IDX", JSON.stringify(nextIdx));
+const idbGetManyByPoint = async (pointId) => {
+  const db = await openDB();
+  const tx = db.transaction(DB_STORE, "readonly");
+  const idx = tx.objectStore(DB_STORE).index("pointId");
+  const req = idx.getAll(pointId);
+  return new Promise((res) => { req.onsuccess = () => { db.close(); res(req.result || []); }; });
+};
+
+const idbDelete = async (id) => {
+  const db = await openDB();
+  const tx = db.transaction(DB_STORE, "readwrite");
+  tx.objectStore(DB_STORE).delete(id);
+  return new Promise((res) => { tx.oncomplete = () => { db.close(); res(); }; });
+};
+
+/* ===== Images ===== */
+const compressImageToDataUrl = (file, opts = {}) => new Promise((resolve, reject) => {
+  const { maxW = 1000, maxH = 1000, quality = 0.7, mime = "image/jpeg" } = opts;
+  const img = new Image();
+  const url = URL.createObjectURL(file);
+  img.onload = () => {
+    let w = img.width, h = img.height;
+    const ratio = Math.min(maxW / w, maxH / h, 1);
+    const nw = Math.max(1, Math.round(w * ratio)), nh = Math.max(1, Math.round(h * ratio));
+    const canvas = document.createElement("canvas");
+    canvas.width = nw; canvas.height = nh;
+    canvas.getContext("2d").drawImage(img, 0, 0, nw, nh);
+    URL.revokeObjectURL(url);
+    resolve(canvas.toDataURL(mime, quality));
+  };
+  img.onerror = () => reject();
+  img.src = url;
+};
+
+const waitForImages = (root) => {
+  const imgs = Array.from(root.querySelectorAll("img"));
+  return Promise.all(imgs.map(img => {
+    if (img.complete && img.naturalWidth > 0) return Promise.resolve();
+    return new Promise((res) => { img.onload = res; img.onerror = res; });
+  }));
+};
+
+let LOGO_DATAURL_CACHE = "";
+const getLogoDataUrl = async () => {
+  if (LOGO_DATAURL_CACHE) return LOGO_DATAURL_CACHE;
+  try {
+    const res = await fetch("logo.png");
+    const blob = await res.blob();
+    LOGO_DATAURL_CACHE = await new Promise((resolve) => {
+      const r = new FileReader(); r.onload = () => resolve(r.result); r.readAsDataURL(blob);
+    });
+    return LOGO_DATAURL_CACHE;
+  } catch { return "logo.png"; }
 };
 
 /* =========================
-   3. RENDU INTERFACE
+   State & Fiches Logic
 ========================= */
-const renderPointHtml = async (p, label) => {
-  const photos = await idbGetPhotos(p.id);
+const defaultPoint = (parentId = null) => ({ 
+  id: newId("pt"), 
+  numero: "", 
+  repere: "", 
+  lat: "", 
+  lon: "", 
+  reserves_txt: "", 
+  date_reprise: "",
+  parentId: parentId 
+});
+
+const emptyState = () => ({
+  chantier: { projet: "", commune: "", zone: "", date: todayISO(), poseur: "", poseurAutre: "", chef: "", controleur: "", controleurAutre: "", signatures: { controleur:"", entreprise:"", client:"" } },
+  points: [ defaultPoint() ]
+});
+
+let state = emptyState();
+
+const ensureSignatures = () => {
+  state.chantier.signatures = state.chantier.signatures || { controleur:"", entreprise:"", client:"" };
+};
+
+const loadFichesIndex = () => JSON.parse(localStorage.getItem(FICHES_INDEX_KEY) || "[]");
+const saveFichesIndex = (arr) => localStorage.setItem(FICHES_INDEX_KEY, JSON.stringify(arr));
+const getCurrentFicheId = () => localStorage.getItem(CURRENT_FICHE_KEY) || "";
+const setCurrentFicheId = (id) => localStorage.setItem(CURRENT_FICHE_KEY, id);
+
+const refreshFicheSelect = () => {
+  const sel = byId("ficheSelect");
+  const index = loadFichesIndex().sort((a,b)=> b.updatedAt - a.updatedAt);
+  sel.innerHTML = index.map(f => `<option value="${f.id}">${escapeHtml(f.name)}</option>`).join("");
+  sel.value = getCurrentFicheId();
+};
+
+const saveCurrentFiche = () => {
+  const id = getCurrentFicheId();
+  if (!id) return;
+  localStorage.setItem(ficheStorageKey(id), JSON.stringify(state));
+  const index = loadFichesIndex();
+  const next = index.map(f => f.id === id ? { ...f, name: makeFicheLabel(state), updatedAt: Date.now() } : f);
+  saveFichesIndex(next);
+};
+
+const loadState = () => {
+  const cur = getCurrentFicheId();
+  const raw = cur ? localStorage.getItem(ficheStorageKey(cur)) : localStorage.getItem(LS_KEY_FALLBACK);
+  if (raw) { 
+      try { 
+          const parsed = JSON.parse(raw);
+          if (parsed && parsed.chantier && Array.isArray(parsed.points)) {
+            state = parsed; 
+            ensureSignatures(); 
+          }
+      } catch {} 
+  }
+};
+
+const duplicateFicheWithPhotos = async () => {
+  const srcState = JSON.parse(JSON.stringify(state));
+  const newFicheId = newId("fiche");
+  srcState.points = await Promise.all(srcState.points.map(async pt => {
+    const newPid = newId("pt");
+    const photos = await idbGetManyByPoint(pt.id);
+    for (const ph of photos) await idbPut({ id: newId("ph"), pointId: newPid, dataUrl: ph.dataUrl, createdAt: Date.now() });
+    return { ...pt, id: newPid };
+  }));
+  localStorage.setItem(ficheStorageKey(newFicheId), JSON.stringify(srcState));
+  const index = loadFichesIndex();
+  index.push({ id: newFicheId, name: makeFicheLabel(srcState) + " (copie)", updatedAt: Date.now() });
+  saveFichesIndex(index);
+  setCurrentFicheId(newFicheId);
+  state = srcState;
+  await render();
+  initSignatures(true);
+  refreshFicheSelect();
+};
+
+/* =========================
+   Render & UI
+========================= */
+const renderPoint = (p, label, photos) => {
   const isChild = p.parentId !== null;
   return `
-  <section class="card ${isChild ? 'linked-point' : ''}" data-id="${p.id}">
+  <section class="card ${isChild ? 'linked-point' : ''}" data-point-id="${p.id}">
     <div class="point-head">
-      <div><span class="pill bad">POINT ${label}</span></div>
+      <div><strong>RÉSERVE ${label}</strong> <span class="pill bad">Non conforme</span></div>
       <div class="btnrow">
-        <button class="btn secondary" data-action="gps">📍 GPS</button>
-        ${!isChild ? `<button class="btn blue" data-action="duplicate">➕ Doubler (ex: 1.1)</button>` : ''}
-        <button class="btn danger" data-action="delete">🗑️</button>
+        <button class="btn secondary" type="button" data-action="gps">📍 GPS</button>
+        ${!isChild ? `<button class="btn blue" type="button" data-action="add-linked">➕ Luminaire lié</button>` : ''}
+        <button class="btn danger" type="button" data-action="remove">🗑️</button>
       </div>
     </div>
     <div class="row" style="margin-top:12px;">
-      <div><label>N° Luminaire</label><input value="${escapeHtml(p.numero)}" data-k="numero" style="${!p.numero?'border:2px solid red':''}"></div>
-      <div><label>Repère / Adresse</label><input value="${escapeHtml(p.repere)}" data-k="repere"></div>
+      <div><label>N° point lumineux</label><input style="${p.numero?'':'border:2px solid #ef4444'}" value="${escapeHtml(p.numero)}" data-k="numero" /></div>
+      <div><label>Adresse / repère</label><input value="${escapeHtml(p.repere)}" data-k="repere" /></div>
+      <div><label>Lat</label><input value="${escapeHtml(p.lat)}" data-k="lat" readonly /></div>
+      <div><label>Lon</label><input value="${escapeHtml(p.lon)}" data-k="lon" readonly /></div>
     </div>
-    <div class="row" style="margin-top:10px;">
-      <div><label>Latitude</label><input value="${p.lat}" readonly class="small"></div>
-      <div><label>Longitude</label><input value="${p.lon}" readonly class="small"></div>
+    <div class="row" style="margin-top:12px;">
+      <div><label>Date de reprise</label><input type="date" value="${escapeHtml(p.date_reprise)}" data-k="date_reprise" /></div>
     </div>
-    <textarea style="margin-top:10px;" data-k="reserves_txt">${escapeHtml(p.reserves_txt)}</textarea>
-    <div style="margin-top:10px;">
-      <input type="file" accept="image/*" multiple data-action="addImg">
-      <div class="photos">${photos.map(ph => `<div class="thumb"><img src="${ph.dataUrl}"><button class="btn danger" style="padding:2px;width:100%;font-size:10px;" data-action="delImg" data-img="${ph.id}">Suppr.</button></div>`).join("")}</div>
+    <h4 style="margin:14px 0 8px 0;">Commentaire</h4>
+    <textarea data-k="reserves_txt">${escapeHtml(p.reserves_txt)}</textarea>
+    <h4 style="margin:14px 0 8px 0;">Photos</h4>
+    <input type="file" accept="image/*" multiple data-action="addPhotos" />
+    <div class="photos">
+      ${photos.map(ph => `<div class="thumb"><img src="${ph.dataUrl}" /><div><button class="btn danger" style="padding:4px;width:100%;font-size:10px;" data-action="rmPhoto" data-photo-id="${ph.id}">Suppr.</button></div></div>`).join("")}
     </div>
   </section>`;
 };
 
-const refreshDisplay = async () => {
-  const wrap = byId("pointsWrap");
-  let html = "";
-  const mains = state.points.filter(x => x.parentId === null);
-  for(let i=0; i<mains.length; i++){
-    html += await renderPointHtml(mains[i], i+1);
-    const children = state.points.filter(x => x.parentId === mains[i].id);
-    for(let j=0; j<children.length; j++) html += await renderPointHtml(children[j], `${i+1}.${j+1}`);
+const render = async () => {
+  const c = state.chantier;
+  byId("projet").value = c.projet; byId("commune").value = c.commune; byId("zone").value = c.zone; byId("date").value = c.date;
+  byId("poseur").value = c.poseur; byId("poseurAutre").value = c.poseurAutre;
+  byId("poseurAutreWrap").style.display = (c.poseur === "__autre__") ? "block" : "none";
+  byId("chef").value = c.chef; byId("controleur").value = c.controleur; byId("controleurAutre").value = c.controleurAutre;
+  byId("controleurAutreWrap").style.display = (c.controleur === "__autre__") ? "block" : "none";
+
+  const chunks = [];
+  const mains = state.points.filter(p => !p.parentId);
+  for (let i = 0; i < mains.length; i++) {
+    const m = mains[i];
+    const mNum = i + 1;
+    chunks.push(renderPoint(m, mNum, await idbGetManyByPoint(m.id)));
+    
+    const linked = state.points.filter(p => p.parentId === m.id);
+    for (let j = 0; j < linked.length; j++) {
+      const sNum = `${mNum}.${j + 1}`;
+      chunks.push(renderPoint(linked[j], sNum, await idbGetManyByPoint(linked[j].id)));
+    }
   }
-  wrap.innerHTML = html;
-  byId("syntheseText").innerText = `Total : ${state.points.length} réserves.`;
+  byId("pointsWrap").innerHTML = chunks.join("");
+  byId("syntheseText").innerHTML = `Points non conformes : <strong>${state.points.length}</strong>`;
 };
 
 /* =========================
-   4. EVENTS
+   Event Binding
 ========================= */
-document.body.addEventListener("input", e => {
-  const card = e.target.closest("[data-id]");
-  if(card && e.target.dataset.k) { state.points.find(p => p.id === card.dataset.id)[e.target.dataset.k] = e.target.value; autoSave(); }
-  if(e.target.id && state.chantier.hasOwnProperty(e.target.id)) { state.chantier[e.target.id] = e.target.value; autoSave(); }
-});
-
-document.body.addEventListener("click", async e => {
-  const btn = e.target.closest("button"); if(!btn) return;
-  const action = btn.dataset.action;
-  const card = btn.closest("[data-id]");
-  const pid = card?.dataset.id;
-
-  if(action === "gps") navigator.geolocation.getCurrentPosition(pos => {
-    const p = state.points.find(x => x.id === pid);
-    p.lat = pos.coords.latitude.toFixed(6); p.lon = pos.coords.longitude.toFixed(6);
-    autoSave(); refreshDisplay();
+const bindChantier = () => {
+  ["projet","commune","zone","date","poseur","chef","controleur"].forEach(id => {
+    byId(id).addEventListener("change", () => { state.chantier[id] = byId(id).value; saveCurrentFiche(); render(); });
   });
-
-  if(action === "duplicate") {
-    const parent = state.points.find(x => x.id === pid);
-    const child = defaultPoint(parent.id);
-    child.reserves_txt = parent.reserves_txt; child.repere = parent.repere;
-    state.points.push(child); autoSave(); refreshDisplay();
-  }
-
-  if(action === "delete") { if(confirm("Supprimer ?")){ state.points = state.points.filter(x => x.id !== pid && x.parentId !== pid); autoSave(); refreshDisplay(); } }
-  if(action === "delImg") { await idbDel(btn.dataset.img); refreshDisplay(); }
-  if(e.target.id === "addPointBtn") { state.points.push(defaultPoint()); autoSave(); refreshDisplay(); }
-  if(e.target.id === "saveFicheBtn") { autoSave(); alert("Enregistré !"); }
-});
-
-document.body.addEventListener("change", async e => {
-  if(e.target.dataset.action === "addImg") {
-    const pid = e.target.closest("[data-id]").dataset.id;
-    for(const f of e.target.files) { const dataUrl = await compressImg(f); await idbPut({id:newId("ph"), pointId:pid, dataUrl}); }
-    refreshDisplay();
-  }
-});
-
-/* =========================
-   5. PDF TABLEAU (PRÉFÉRÉ)
-========================= */
-const getLogoDataUrl = async () => {
-  try {
-    const res = await fetch("logo.png");
-    const blob = await res.blob();
-    return await new Promise(r => { const f=new FileReader(); f.onload=()=>r(f.result); f.readAsDataURL(blob); });
-  } catch { return ""; }
+  ["poseurAutre","controleurAutre"].forEach(id => {
+    byId(id).addEventListener("input", () => { state.chantier[id] = byId(id).value; saveCurrentFiche(); });
+  });
 };
 
-const generatePDF = async (share = false) => {
-  if(state.points.some(p => !p.numero)) return alert("Veuillez saisir le N° de luminaire pour tous les points.");
-  byId("pdfLoading").style.display = "flex";
+const handlePointsEvents = () => {
+  const wrap = byId("pointsWrap");
+  wrap.addEventListener("input", (e) => {
+    const card = e.target.closest("[data-point-id]"), k = e.target.getAttribute("data-k");
+    if (card && k) { 
+        const p = state.points.find(x => x.id === card.dataset.pointId);
+        if(p) p[k] = e.target.value; 
+        saveCurrentFiche(); 
+    }
+  });
+  wrap.addEventListener("change", async (e) => {
+    const card = e.target.closest("[data-point-id]");
+    if (card && e.target.dataset.action === "addPhotos") {
+      for (const f of e.target.files) {
+        const dataUrl = await compressImageToDataUrl(f);
+        await idbPut({ id: newId("ph"), pointId: card.dataset.pointId, dataUrl, createdAt: Date.now() });
+      }
+      render(); saveCurrentFiche();
+    }
+  });
+  wrap.addEventListener("click", async (e) => {
+    const btn = e.target.closest("button"), card = e.target.closest("[data-point-id]");
+    if (!btn || !card) return;
+    const pid = card.dataset.pointId, action = btn.dataset.action;
+    
+    if (action === "gps") {
+        navigator.geolocation.getCurrentPosition(pos => { 
+            const p = state.points.find(x => x.id === pid);
+            if(p) { p.lat = pos.coords.latitude.toFixed(6); p.lon = pos.coords.longitude.toFixed(6); }
+            render(); saveCurrentFiche(); 
+        });
+    }
+
+    if (action === "add-linked") {
+        const parent = state.points.find(x => x.id === pid);
+        const child = defaultPoint(parent.id);
+        child.reserves_txt = parent.reserves_txt; child.repere = parent.repere;
+        state.points.push(child); render(); saveCurrentFiche();
+    }
+
+    if (action === "remove") { 
+        if(confirm("Supprimer ce point ?")) {
+            state.points = state.points.filter(x => x.id !== pid && x.parentId !== pid); 
+            render(); saveCurrentFiche(); 
+        }
+    }
+    if (action === "rmPhoto") { await idbDelete(btn.dataset.photoId); render(); }
+  });
+};
+
+/* =========================
+   Signatures
+========================= */
+let sigCleanup = [];
+const setupSignaturePad = (canvasId, clearBtnId, key) => {
+  const canvas = byId(canvasId), ctx = canvas.getContext("2d");
+  ctx.lineWidth = 2; ctx.lineCap = "round"; ctx.lineJoin = "round";
   
+  if (state.chantier.signatures[key]) { 
+      const img = new Image(); 
+      img.onload = () => ctx.drawImage(img, 0, 0, canvas.width, canvas.height); 
+      img.src = state.chantier.signatures[key]; 
+  } else {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+  }
+  
+  let drawing = false;
+  const getPos = (ev) => {
+    const rect = canvas.getBoundingClientRect();
+    const c = ev.touches ? ev.touches[0] : ev;
+    return { 
+        x: (c.clientX - rect.left) * (canvas.width / rect.width), 
+        y: (c.clientY - rect.top) * (canvas.height / rect.height) 
+    };
+  };
+  const start = (e) => { e.preventDefault(); drawing = true; const p = getPos(e); ctx.beginPath(); ctx.moveTo(p.x, p.y); };
+  const move = (e) => { if (drawing) { e.preventDefault(); const p = getPos(e); ctx.lineTo(p.x, p.y); ctx.stroke(); } };
+  const stop = () => { if (drawing) { drawing = false; state.chantier.signatures[key] = canvas.toDataURL(); saveCurrentFiche(); } };
+
+  canvas.addEventListener("mousedown", start); canvas.addEventListener("mousemove", move); window.addEventListener("mouseup", stop);
+  canvas.addEventListener("touchstart", start, {passive:false}); canvas.addEventListener("touchmove", move, {passive:false}); canvas.addEventListener("touchend", stop);
+  
+  const clear = () => { ctx.clearRect(0, 0, canvas.width, canvas.height); state.chantier.signatures[key] = ""; saveCurrentFiche(); };
+  byId(clearBtnId).addEventListener("click", clear);
+  
+  sigCleanup.push(() => { 
+      byId(clearBtnId).removeEventListener("click", clear); 
+      window.removeEventListener("mouseup", stop); 
+  });
+};
+
+const initSignatures = (f=false) => { 
+    if(f) sigCleanup.forEach(c=>c()); 
+    sigCleanup=[]; 
+    setupSignaturePad("sigControleur", "clearSigControleur", "controleur"); 
+    setupSignaturePad("sigEntreprise", "clearSigEntreprise", "entreprise"); 
+    setupSignaturePad("sigClient", "clearSigClient", "client"); 
+};
+
+/* =========================
+   PDF & Share
+========================= */
+const buildPdfBody = async () => {
   const logo = await getLogoDataUrl();
-  const container = document.createElement("div");
-  container.style.width = "800px"; container.style.padding = "20px"; container.style.background = "#fff";
-  container.style.position = "absolute"; container.style.left = "-9999px";
+  const c = state.chantier;
+  const sigs = state.chantier.signatures || {};
   
-  // Construction des lignes du tableau
-  let tableRows = "";
-  const mains = state.points.filter(x => x.parentId === null);
-  for(let i=0; i<mains.length; i++){
-    const p = mains[i];
-    const phs = await idbGetPhotos(p.id);
-    const label = i+1;
-    tableRows += `
-      <tr style="page-break-inside:avoid;">
-        <td style="border:1px solid #ddd;padding:8px;">${label}</td>
-        <td style="border:1px solid #ddd;padding:8px;"><strong>${escapeHtml(p.numero)}</strong></td>
-        <td style="border:1px solid #ddd;padding:8px;background:#fee2e2;color:#991b1b;font-weight:700;">${escapeHtml(p.reserves_txt)}</td>
-        <td style="border:1px solid #ddd;padding:8px;">
-          <div style="display:flex;gap:5px;">${phs.slice(0,3).map(ph=>`<img src="${ph.dataUrl}" style="height:65px;border:1px solid #ddd;border-radius:4px;">`).join("")}</div>
-        </td>
-        <td style="border:1px solid #ddd;padding:8px;font-size:11px;">${p.repere}<br>${p.lat}, ${p.lon}</td>
-      </tr>`;
-      
-    const children = state.points.filter(x => x.parentId === p.id);
-    for(let j=0; j<children.length; j++){
-      const c = children[j];
-      const cPhs = await idbGetPhotos(c.id);
-      tableRows += `
+  let rowsHtml = "";
+  const mains = state.points.filter(p => !p.parentId);
+  
+  for (let i = 0; i < mains.length; i++) {
+    const m = mains[i];
+    const mPhotos = await idbGetManyByPoint(m.id);
+    const mNum = i + 1;
+    
+    rowsHtml += `
+    <tr style="page-break-inside:avoid;">
+      <td style="border:1px solid #ddd;padding:8px;">${mNum}</td>
+      <td style="border:1px solid #ddd;padding:8px;"><strong>${escapeHtml(m.numero)}</strong></td>
+      <td style="border:1px solid #ddd;padding:8px;background:#fee2e2;color:#991b1b;font-weight:700;">${escapeHtml(m.reserves_txt)}</td>
+      <td style="border:1px solid #ddd;padding:8px;">
+        <div style="display:flex;gap:5px;">${mPhotos.slice(0,3).map(ph=>`<img src="${ph.dataUrl}" style="height:70px;border-radius:4px;">`).join("")}</div>
+      </td>
+      <td style="border:1px solid #ddd;padding:8px;font-size:11px;">${escapeHtml(m.repere)}<br>${m.lat}, ${m.lon}</td>
+      <td style="border:1px solid #ddd;padding:8px;">${m.date_reprise}</td>
+    </tr>`;
+
+    const linked = state.points.filter(p => p.parentId === m.id);
+    for (let j = 0; j < linked.length; j++) {
+      const s = linked[j];
+      const sPhotos = await idbGetManyByPoint(s.id);
+      rowsHtml += `
       <tr style="page-break-inside:avoid; background:#f9fafb;">
-        <td style="border:1px solid #ddd;padding:8px;padding-left:15px;color:#2563eb;">${label}.${j+1}</td>
-        <td style="border:1px solid #ddd;padding:8px;"><strong>${escapeHtml(c.numero)}</strong></td>
-        <td style="border:1px solid #ddd;padding:8px;">${escapeHtml(c.reserves_txt)}</td>
+        <td style="border:1px solid #ddd;padding:8px;color:#2563eb;">${mNum}.${j+1}</td>
+        <td style="border:1px solid #ddd;padding:8px;"><strong>${escapeHtml(s.numero)}</strong></td>
+        <td style="border:1px solid #ddd;padding:8px;">${escapeHtml(s.reserves_txt)}</td>
         <td style="border:1px solid #ddd;padding:8px;">
-          <div style="display:flex;gap:5px;">${cPhs.slice(0,3).map(ph=>`<img src="${ph.dataUrl}" style="height:65px;border:1px solid #ddd;border-radius:4px;">`).join("")}</div>
+          <div style="display:flex;gap:5px;">${sPhotos.slice(0,3).map(ph=>`<img src="${ph.dataUrl}" style="height:70px;border-radius:4px;">`).join("")}</div>
         </td>
-        <td style="border:1px solid #ddd;padding:8px;font-size:11px;">${c.repere}<br>${c.lat}, ${c.lon}</td>
+        <td style="border:1px solid #ddd;padding:8px;font-size:11px;">${escapeHtml(s.repere)}<br>${s.lat}, ${s.lon}</td>
+        <td style="border:1px solid #ddd;padding:8px;">${s.date_reprise}</td>
       </tr>`;
     }
   }
 
-  container.innerHTML = `
+  return `
+  <div style="padding:20px;font-family:sans-serif">
     <div style="display:flex;align-items:center;border-bottom:2px solid #111827;padding-bottom:10px;margin-bottom:20px;">
-      <img src="${logo}" style="height:70px;margin-right:20px;">
+      <img src="${logo}" style="height:80px;margin-right:20px;">
       <div>
         <h2 style="margin:0;">PV – Points non conformes (Réserves)</h2>
-        <p style="font-size:12px;margin:5px 0;">Projet: <b>${state.chantier.projet}</b> | Commune: <b>${state.chantier.commune}</b> | Date: <b>${state.chantier.date}</b></p>
+        <p style="font-size:12px;margin:5px 0;">Projet: <b>${c.projet}</b> | Commune: <b>${c.commune}</b> | Date: <b>${c.date}</b></p>
       </div>
     </div>
-    <table style="width:100%;border-collapse:collapse;font-size:12px;">
-      <thead><tr style="background:#f3f4f6;">
+    <table style="width:100%;border-collapse:collapse;margin-top:20px;font-size:11px">
+      <thead><tr style="background:#f3f4f6">
         <th style="border:1px solid #ddd;padding:8px;text-align:left;">#</th>
         <th style="border:1px solid #ddd;padding:8px;text-align:left;">N° Lum.</th>
         <th style="border:1px solid #ddd;padding:8px;text-align:left;">Observation</th>
         <th style="border:1px solid #ddd;padding:8px;text-align:left;">Photos</th>
         <th style="border:1px solid #ddd;padding:8px;text-align:left;">Localisation</th>
+        <th style="border:1px solid #ddd;padding:8px;text-align:left;">Reprise</th>
       </tr></thead>
-      <tbody>${tableRows}</tbody>
+      <tbody>${rowsHtml}</tbody>
     </table>
-    <div style="margin-top:30px;display:flex;gap:15px;">
-      ${["Contrôleur","Entreprise","Client"].map(t => `
+    <div style="display:flex;margin-top:30px;gap:10px;">
+      ${["Contrôleur","Entreprise","Client"].map(t=>`
         <div style="flex:1;border:1px solid #ddd;padding:10px;">
           <b>${t}</b><br>
-          ${state.chantier.signatures[t.toLowerCase()] ? `<img src="${state.chantier.signatures[t.toLowerCase()]}" style="width:100%;max-height:120px;object-fit:contain;">` : `<div style="height:80px;"></div>`}
-        </div>
-      `).join("")}
-    </div>`;
+          ${sigs[t.toLowerCase()]?`<img src="${sigs[t.toLowerCase()]}" style="width:100%;max-height:120px;object-fit:contain;">`:`<div style="height:80px"></div>`}
+        </div>`).join("")}
+    </div>
+  </div>`;
+};
+
+const exportPDF = async (action = "save") => {
+  if (state.points.some(p => !p.numero.trim())) return alert("Veuillez saisir le N° de luminaire pour tous les points.");
   
-  document.body.appendChild(container);
-  const canvas = await html2canvas(container, {scale:2});
-  const pdf = new window.jspdf.jsPDF();
+  byId("pdfLoading").style.display = "flex";
+  const container = document.createElement("div");
+  container.style.position="absolute"; container.style.left="-9999px"; container.style.width="794px";
+  container.innerHTML = await buildPdfBody(); document.body.appendChild(container);
+  
+  await waitForImages(container);
+  const canvas = await html2canvas(container, { scale: 1.5 });
+  const { jsPDF } = window.jspdf;
+  const pdf = new jsPDF({ unit: "mm", format: "a4", orientation: "portrait" });
+  
   const pdfW = pdf.internal.pageSize.getWidth();
   const pdfH = (canvas.height * pdfW) / canvas.width;
   pdf.addImage(canvas.toDataURL("image/jpeg", 0.9), "JPEG", 0, 0, pdfW, pdfH);
   
-  const name = `PV_${state.chantier.commune||'Export'}.pdf`;
-  if(share && navigator.share) {
-    const file = new File([pdf.output("blob")], name, {type:"application/pdf"});
-    await navigator.share({files:[file], title:"PV Réception"});
-  } else pdf.save(name);
+  byId("pdfLoading").style.display = "none";
+  const name = `PV_${state.chantier.commune || "Chantier"}.pdf`;
   
-  container.remove(); byId("pdfLoading").style.display = "none";
+  if (action === "share") {
+    const file = new File([pdf.output("blob")], name, { type: "application/pdf" });
+    if (navigator.canShare && navigator.canShare({ files: [file] })) await navigator.share({ files: [file], title: 'PV Réception' });
+    else pdf.save(name);
+  } else {
+    pdf.save(name);
+  }
+  container.remove();
 };
 
 /* =========================
-   6. INITIALISATION
+   Main Logic
 ========================= */
-const initSignatures = () => {
-  ["sigControleur", "sigEntreprise", "sigClient"].forEach(id => {
-    const canvas = byId(id), ctx = canvas.getContext("2d");
-    const key = id.replace("sig","").toLowerCase();
-    ctx.lineWidth = 2; ctx.lineCap = "round";
-    if(state.chantier.signatures[key]) {
-      const img = new Image(); img.onload = () => ctx.drawImage(img,0,0,canvas.width,canvas.height);
-      img.src = state.chantier.signatures[key];
-    }
-    let drawing = false;
-    const getPos = (e) => {
-        const rect = canvas.getBoundingClientRect();
-        const c = e.touches ? e.touches[0] : e;
-        return { x: (c.clientX - rect.left) * (canvas.width / rect.width), y: (c.clientY - rect.top) * (canvas.height / rect.height) };
-    };
-    const start = (e) => { e.preventDefault(); drawing = true; ctx.beginPath(); const p = getPos(e); ctx.moveTo(p.x, p.y); };
-    const move = (e) => { if(drawing) { e.preventDefault(); const p = getPos(e); ctx.lineTo(p.x, p.y); ctx.stroke(); } };
-    const stop = () => { if(drawing) { drawing = false; state.chantier.signatures[key] = canvas.toDataURL(); autoSave(); } };
-    canvas.addEventListener("mousedown", start); canvas.addEventListener("mousemove", move); window.addEventListener("mouseup", stop);
-    canvas.addEventListener("touchstart", start, {passive:false}); canvas.addEventListener("touchmove", move, {passive:false}); canvas.addEventListener("touchend", stop);
-    byId(`clear${id}`).onclick = () => { ctx.clearRect(0,0,canvas.width,canvas.height); state.chantier.signatures[key]=""; autoSave(); };
+const bindButtons = () => {
+  byId("addPointBtn").addEventListener("click", () => { state.points.push(defaultPoint()); render(); saveCurrentFiche(); });
+  byId("pdfBtn").addEventListener("click", () => exportPDF("save"));
+  byId("sharePdfBtn").addEventListener("click", () => exportPDF("share"));
+  byId("resetBtn").addEventListener("click", () => { if(confirm("Vider la fiche courante ?")) { state = emptyState(); render(); initSignatures(true); saveCurrentFiche(); } });
+};
+
+const bindFichesUI = () => {
+  const sel = byId("ficheSelect");
+  sel.addEventListener("change", (e) => { setCurrentFicheId(e.target.value); loadState(); render(); initSignatures(true); });
+  byId("saveFicheBtn").addEventListener("click", () => { saveCurrentFiche(); alert("Fiche sauvegardée"); refreshFicheSelect(); });
+  byId("newFicheBtn").addEventListener("click", () => { 
+      const id = newId("fiche"); 
+      state = emptyState(); 
+      localStorage.setItem(ficheStorageKey(id), JSON.stringify(state)); 
+      const index = loadFichesIndex(); 
+      index.push({ id, name: "Nouvelle fiche", updatedAt: Date.now() }); 
+      saveFichesIndex(index); 
+      setCurrentFicheId(id); 
+      render(); 
+      initSignatures(true); 
+      refreshFicheSelect(); 
+  });
+  byId("dupFicheBtn").addEventListener("click", duplicateFicheWithPhotos);
+  byId("delFicheBtn").addEventListener("click", () => { 
+      const id = getCurrentFicheId(); 
+      if(confirm("Supprimer cette fiche ?")) { 
+          localStorage.removeItem(ficheStorageKey(id)); 
+          const index = loadFichesIndex().filter(f => f.id !== id); 
+          saveFichesIndex(index); 
+          if(index.length) setCurrentFicheId(index[0].id); 
+          loadState(); 
+          render(); 
+          initSignatures(true); 
+          refreshFicheSelect(); 
+      } 
   });
 };
 
 (async () => {
-  const curId = localStorage.getItem("FL_CUR") || "default";
-  const raw = localStorage.getItem(`FICHE_${curId}`);
-  if(raw) state = JSON.parse(raw);
-  byId("projet").value = state.chantier.projet; byId("commune").value = state.chantier.commune; byId("date").value = state.chantier.date;
-  const idx = JSON.parse(localStorage.getItem("FL_IDX") || "[]");
-  byId("ficheSelect").innerHTML = idx.map(f => `<option value="${f.id}">${f.name}</option>`).join("");
-  byId("ficheSelect").value = curId;
-  byId("ficheSelect").onchange = e => { localStorage.setItem("FL_CUR", e.target.value); location.reload(); };
-  byId("newFicheBtn").onclick = () => { const id = newId("f"); localStorage.setItem("FL_CUR", id); location.reload(); };
-  byId("pdfBtn").onclick = () => generatePDF(false);
-  byId("sharePdfBtn").onclick = () => generatePDF(true);
-  await refreshDisplay(); initSignatures();
+  const index = loadFichesIndex();
+  if (!index.length) { 
+      const id = newId("fiche"); 
+      saveFichesIndex([{ id, name: "Fiche 1", updatedAt: Date.now() }]); 
+      setCurrentFicheId(id); 
+  }
+  loadState();
+  bindChantier(); handlePointsEvents(); bindButtons(); bindFichesUI();
+  refreshFicheSelect(); await render(); initSignatures(true);
 })();
 </script>
 </body>
