@@ -1165,44 +1165,33 @@ const buildPdfBody = async () => {
 
 const exportPDF = async () => {
   let container = null;
-  let previewWin = null;
 
   try {
-    // ouvrir tout de suite (sinon pop-up bloquée sur iPad)
-    previewWin = window.open("", "_blank");
-    if (!previewWin) {
-      alert("Pop-up bloquée. Autorise les pop-ups (Safari).");
-      return;
-    }
-    previewWin.document.write("<p style='font-family:system-ui'>Génération du PDF…</p>");
-
-    // validation minimum
+    // 1. Validation : vérifier si tous les points ont un numéro
     const missing = state.points
       .map((p, i) => (!String(p.numero || "").trim() ? `Point ${i+1}` : null))
       .filter(Boolean);
     if (missing.length) {
       alert("Numéro obligatoire manquant pour : " + missing.join(", "));
-      previewWin.close();
       return;
     }
 
+    // 2. Afficher l'écran de chargement
     byId("pdfLoading").style.display = "flex";
 
-    // container rendu
+    // 3. Créer un conteneur temporaire pour générer l'image du PDF
     container = document.createElement("div");
-    container.style.position = "fixed";
-    container.style.left = "0";
+    container.style.position = "absolute";
+    container.style.left = "-9999px"; // On le cache en dehors de l'écran (plus fiable que visibility: hidden)
     container.style.top = "0";
-    container.style.width = "794px"; // A4 @96dpi env.
+    container.style.width = "794px"; // Largeur approximative d'un A4
     container.style.background = "#fff";
-    container.style.visibility = "hidden"; // iPad: invisible mais rendu OK
-    container.style.pointerEvents = "none";
-    container.style.zIndex = "9999";
+    container.style.zIndex = "-1";
 
     container.innerHTML = await buildPdfBody();
     document.body.appendChild(container);
 
-    // attendre paint + fonts + images
+    // Attendre que le navigateur dessine les éléments et charge les polices/images
     await new Promise(r => requestAnimationFrame(r));
     await new Promise(r => requestAnimationFrame(r));
     if (document.fonts && document.fonts.ready) {
@@ -1211,7 +1200,7 @@ const exportPDF = async () => {
     await waitForImages(container);
     await new Promise(r => setTimeout(r, 150));
 
-    /* ✅ OPTIM iPad: scale plus bas + jpeg 0.90 */
+    // 4. Transformer le HTML en image (Canvas)
     const canvas = await html2canvas(container, {
       scale: 1.3,
       useCORS: true,
@@ -1221,22 +1210,25 @@ const exportPDF = async () => {
       imageTimeout: 20000
     });
 
+    // 5. Construire le document PDF
     const { jsPDF } = window.jspdf;
     const pdf = new jsPDF({ unit: "mm", format: "a4", orientation: "portrait" });
 
     const pdfW = pdf.internal.pageSize.getWidth();
     const pdfH = pdf.internal.pageSize.getHeight();
-    const M = 8;
+    const M = 8; // Marge en mm
     const usableW = pdfW - 2 * M;
     const usableH = pdfH - 2 * M;
 
     const imgW = usableW;
     const imgH = canvas.height * (imgW / canvas.width);
 
+    // Si ça tient sur une seule page
     if (imgH <= usableH) {
       const imgData = canvas.toDataURL("image/jpeg", 0.90);
       pdf.addImage(imgData, "JPEG", M, M, imgW, imgH);
     } else {
+      // Découpage magique pour le multi-pages
       const pageCanvas = document.createElement("canvas");
       const pageCtx = pageCanvas.getContext("2d");
 
@@ -1264,18 +1256,20 @@ const exportPDF = async () => {
       }
     }
 
+    // 6. Cacher l'écran de chargement
     byId("pdfLoading").style.display = "none";
 
-    const blob = pdf.output("blob");
-    const url = URL.createObjectURL(blob);
-    previewWin.location.href = url;
-    setTimeout(() => URL.revokeObjectURL(url), 60000);
+    // 7. Déclencher le téléchargement propre
+    const nomCommune = state.chantier.commune ? state.chantier.commune.replace(/[^a-zA-Z0-9]/g, "_") : "Fiche";
+    const nomFichier = `PV_Reserves_${nomCommune}.pdf`;
+    
+    pdf.save(nomFichier);
 
   } catch (e) {
     byId("pdfLoading").style.display = "none";
     alert("Erreur PDF : " + (e?.message || e));
-    if (previewWin && !previewWin.closed) previewWin.close();
   } finally {
+    // Toujours nettoyer le conteneur à la fin
     if (container) container.remove();
   }
 };
@@ -1425,3 +1419,4 @@ const bindFichesUI = () => {
 </script>
 </body>
 </html>
+
