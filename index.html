@@ -1,1552 +1,1304 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="fr">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<meta name="theme-color" content="#0f172a">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="Audit EP">
-<title>Audit EP</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@600;700;800&family=DM+Sans:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
-<style>
-:root {
-  --bg: #0f172a;
-  --bg2: #1e293b;
-  --bg3: #334155;
-  --surface: #1e293b;
-  --border: rgba(148,163,184,0.15);
-  --border2: rgba(148,163,184,0.3);
-  --text: #f1f5f9;
-  --text2: #94a3b8;
-  --text3: #64748b;
-  --accent: #38bdf8;
-  --accent-dim: rgba(56,189,248,0.15);
-  --green: #4ade80;
-  --green-dim: rgba(74,222,128,0.15);
-  --orange: #fb923c;
-  --orange-dim: rgba(251,146,60,0.15);
-  --red: #f87171;
-  --red-dim: rgba(248,113,113,0.15);
-  --yellow: #facc15;
-  --radius: 14px;
-  --radius-sm: 8px;
-  --font-display: 'Syne', sans-serif;
-  --font-body: 'DM Sans', sans-serif;
-  --font-mono: 'DM Mono', monospace;
-  --bottom-nav: 70px;
-}
-* { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
-html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(--text); font-family: var(--font-body); }
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Réception chantier – Lampadaires solaires</title>
 
-/* ── SCREENS ── */
-.screen { position: absolute; inset: 0; display: none; flex-direction: column; }
-.screen.active { display: flex; }
+  <style>
+    :root { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial; }
+    body { margin: 0; background: #f6f7f9; }
+    header { padding: 16px; background: #111827; color: white; }
+    main { padding: 16px; max-width: 980px; margin: 0 auto; }
 
-/* ── LOGIN ── */
-#screen-login {
-  background: var(--bg);
-  align-items: center;
-  justify-content: center;
-  padding: 2rem;
-}
-.login-logo { margin-bottom: 2.5rem; text-align: center; }
-.login-logo .logo-icon {
-  width: 64px; height: 64px;
-  background: var(--accent-dim);
-  border: 1px solid var(--accent);
-  border-radius: 18px;
-  display: flex; align-items: center; justify-content: center;
-  margin: 0 auto 1rem;
-}
-.login-logo h1 { font-family: var(--font-display); font-size: 28px; font-weight: 800; color: var(--text); }
-.login-logo p { font-size: 13px; color: var(--text2); margin-top: 4px; }
-.login-card {
-  background: var(--bg2);
-  border: 1px solid var(--border2);
-  border-radius: var(--radius);
-  padding: 1.5rem;
-  width: 100%;
-  max-width: 360px;
-}
-.field-group { margin-bottom: 1rem; }
-.field-label { font-size: 11px; font-weight: 500; color: var(--text2); text-transform: uppercase; letter-spacing: .06em; margin-bottom: 6px; display: block; }
-.field-input {
-  width: 100%;
-  background: var(--bg3);
-  border: 1px solid var(--border2);
-  border-radius: var(--radius-sm);
-  padding: 12px 14px;
-  font-size: 15px;
-  color: var(--text);
-  font-family: var(--font-body);
-  outline: none;
-  transition: border-color .15s;
-}
-.field-input:focus { border-color: var(--accent); }
-.field-select {
-  width: 100%;
-  background: var(--bg3);
-  border: 1px solid var(--border2);
-  border-radius: var(--radius-sm);
-  padding: 12px 14px;
-  font-size: 15px;
-  color: var(--text);
-  font-family: var(--font-body);
-  outline: none;
-  appearance: none;
-}
-.field-select option { background: var(--bg2); }
-.btn-primary {
-  width: 100%;
-  background: var(--accent);
-  color: #0f172a;
-  border: none;
-  border-radius: var(--radius-sm);
-  padding: 14px;
-  font-size: 15px;
-  font-weight: 500;
-  font-family: var(--font-display);
-  cursor: pointer;
-  transition: opacity .15s;
-  margin-top: 0.5rem;
-}
-.btn-primary:active { opacity: 0.8; }
+    .card { background: white; border-radius: 12px; padding: 24px; margin-bottom: 12px; box-shadow: 0 2px 10px rgba(0,0,0,.06); }
+    .row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    @media (max-width: 720px){ .row { grid-template-columns: 1fr; } }
 
-/* ── TOP BAR ── */
-.topbar {
-  background: var(--bg2);
-  border-bottom: 1px solid var(--border);
-  padding: 12px 16px;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-shrink: 0;
-  z-index: 10;
-}
-.topbar-title { font-family: var(--font-display); font-size: 16px; font-weight: 700; flex: 1; }
-.topbar-sub { font-size: 11px; color: var(--text2); }
-.topbar-badge {
-  background: var(--accent-dim);
-  border: 1px solid var(--accent);
-  border-radius: 20px;
-  padding: 3px 10px;
-  font-size: 11px;
-  font-weight: 500;
-  color: var(--accent);
-  font-family: var(--font-mono);
-}
-.icon-btn {
-  width: 36px; height: 36px;
-  background: var(--bg3);
-  border: 1px solid var(--border2);
-  border-radius: var(--radius-sm);
-  display: flex; align-items: center; justify-content: center;
-  cursor: pointer;
-  flex-shrink: 0;
-}
+    label { display: block; font-size: 12px; color: #374151; margin-bottom: 4px; }
+    input, select, textarea, button {
+      width: 100%; padding: 10px; border-radius: 10px; border: 1px solid #d1d5db; background: #fff;
+      font-size: 14px;
+      box-sizing: border-box;
+    }
+    textarea { min-height: 70px; resize: vertical; }
 
-/* ── BOTTOM NAV ── */
-.bottom-nav {
-  position: absolute;
-  bottom: 0; left: 0; right: 0;
-  height: var(--bottom-nav);
-  background: var(--bg2);
-  border-top: 1px solid var(--border);
-  display: flex;
-  align-items: center;
-  justify-content: space-around;
-  z-index: 100;
-  padding-bottom: env(safe-area-inset-bottom);
-}
-.nav-item {
-  display: flex; flex-direction: column; align-items: center;
-  gap: 4px; cursor: pointer; padding: 8px 20px;
-  opacity: 0.4; transition: opacity .15s;
-}
-.nav-item.active { opacity: 1; }
-.nav-item svg { width: 22px; height: 22px; }
-.nav-label { font-size: 10px; font-weight: 500; color: var(--text); }
-.nav-item.active .nav-label { color: var(--accent); }
-.nav-item.active svg { stroke: var(--accent); }
+    .btnrow { display:flex; gap:10px; flex-wrap: wrap; align-items:center; }
+    .btn { cursor:pointer; border: 0; background:#111827; color:white; padding:10px 12px; border-radius:10px; width:auto; }
+    .btn.secondary { background:#374151; }
+    .btn.danger { background:#b91c1c; }
 
-/* ── MAP SCREEN ── */
-#screen-map { padding-bottom: var(--bottom-nav); }
-#map { flex: 1; }
-.map-fab {
-  position: absolute;
-  bottom: calc(var(--bottom-nav) + 16px);
-  right: 16px;
-  width: 52px; height: 52px;
-  background: var(--accent);
-  border-radius: 50%;
-  display: flex; align-items: center; justify-content: center;
-  box-shadow: 0 4px 20px rgba(56,189,248,0.4);
-  cursor: pointer;
-  z-index: 50;
-  transition: transform .15s;
-}
-.map-fab:active { transform: scale(0.92); }
-.map-controls {
-  position: absolute;
-  top: 60px; right: 12px;
-  display: flex; flex-direction: column; gap: 8px;
-  z-index: 50;
-}
-.map-ctrl-btn {
-  width: 40px; height: 40px;
-  background: var(--bg2);
-  border: 1px solid var(--border2);
-  border-radius: var(--radius-sm);
-  display: flex; align-items: center; justify-content: center;
-  cursor: pointer;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.3);
-}
+    .pill { display:inline-block; padding:4px 10px; border-radius:999px; font-size:12px; }
+    .bad { background:#fee2e2; color:#991b1b; }
 
-/* ── LIST SCREEN ── */
-#screen-list { padding-bottom: var(--bottom-nav); overflow: hidden; }
-.list-scroll { flex: 1; overflow-y: auto; padding: 12px; -webkit-overflow-scrolling: touch; }
-.list-item {
-  background: var(--bg2);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 12px 14px;
-  margin-bottom: 8px;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  cursor: pointer;
-  transition: border-color .15s;
-  position: relative;
-}
-.list-item:active { border-color: var(--accent); }
-.list-item-dot {
-  width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0;
-}
-.list-item-info { flex: 1; min-width: 0; }
-.list-item-id { font-family: var(--font-mono); font-size: 12px; color: var(--accent); margin-bottom: 2px; }
-.list-item-title { font-size: 14px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.list-item-sub { font-size: 12px; color: var(--text2); margin-top: 2px; }
-.list-item-arrow { color: var(--text3); }
-.panier-badge {
-  position: absolute; top: 10px; right: 36px;
-  background: var(--orange-dim);
-  border: 1px solid var(--orange);
-  border-radius: 10px;
-  padding: 2px 7px;
-  font-size: 10px;
-  color: var(--orange);
-  font-weight: 500;
-}
+    .point-head { display:flex; align-items:flex-start; justify-content:space-between; gap:10px; flex-wrap: wrap; }
+    .small { font-size:12px; color:#6b7280; }
 
-/* ── FORM SCREEN ── */
-#screen-form { overflow: hidden; }
-.form-scroll { flex: 1; overflow-y: auto; padding: 12px 16px 24px; -webkit-overflow-scrolling: touch; }
-.form-section-title {
-  font-size: 10px; font-weight: 500; color: var(--text3);
-  text-transform: uppercase; letter-spacing: .08em;
-  margin: 20px 0 10px;
-}
-.form-section-title:first-child { margin-top: 4px; }
-.form-row { margin-bottom: 12px; }
-.form-label { font-size: 12px; color: var(--text2); margin-bottom: 5px; display: flex; align-items: center; gap: 6px; }
-.req { color: var(--accent); font-size: 10px; }
-.form-input {
-  width: 100%;
-  background: var(--bg2);
-  border: 1px solid var(--border2);
-  border-radius: var(--radius-sm);
-  padding: 11px 13px;
-  font-size: 14px;
-  color: var(--text);
-  font-family: var(--font-body);
-  outline: none;
-  transition: border-color .15s;
-}
-.form-input:focus { border-color: var(--accent); }
-.form-select {
-  width: 100%;
-  background: var(--bg2);
-  border: 1px solid var(--border2);
-  border-radius: var(--radius-sm);
-  padding: 11px 13px;
-  font-size: 14px;
-  color: var(--text);
-  font-family: var(--font-body);
-  outline: none;
-  appearance: none;
-}
-.form-select option { background: var(--bg2); }
-.gps-row {
-  background: var(--bg2);
-  border: 1px solid var(--border2);
-  border-radius: var(--radius-sm);
-  padding: 11px 13px;
-  display: flex; align-items: center; gap: 10px;
-}
-.gps-coords { font-family: var(--font-mono); font-size: 12px; color: var(--green); flex: 1; }
-.gps-coords.empty { color: var(--text3); font-family: var(--font-body); font-size: 13px; }
-.gps-btn {
-  background: var(--green-dim);
-  border: 1px solid var(--green);
-  border-radius: var(--radius-sm);
-  padding: 7px 12px;
-  font-size: 12px;
-  color: var(--green);
-  font-weight: 500;
-  cursor: pointer;
-  white-space: nowrap;
-}
-.toggle-row {
-  display: flex; align-items: center; justify-content: space-between;
-  background: var(--bg2);
-  border: 1px solid var(--border2);
-  border-radius: var(--radius-sm);
-  padding: 12px 13px;
-}
-.toggle-label { font-size: 14px; color: var(--text); }
-.toggle {
-  width: 44px; height: 26px;
-  background: var(--bg3);
-  border-radius: 13px;
-  position: relative;
-  cursor: pointer;
-  transition: background .2s;
-  border: 1px solid var(--border2);
-}
-.toggle.on { background: var(--green); border-color: var(--green); }
-.toggle::after {
-  content: '';
-  position: absolute;
-  width: 20px; height: 20px;
-  background: white;
-  border-radius: 50%;
-  top: 2px; left: 2px;
-  transition: transform .2s;
-}
-.toggle.on::after { transform: translateX(18px); }
-.photo-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
-.photo-slot {
-  aspect-ratio: 1;
-  background: var(--bg2);
-  border: 1px dashed var(--border2);
-  border-radius: var(--radius-sm);
-  display: flex; flex-direction: column; align-items: center; justify-content: center;
-  gap: 4px; cursor: pointer; overflow: hidden;
-  transition: border-color .15s;
-}
-.photo-slot:active { border-color: var(--accent); }
-.photo-slot img { width: 100%; height: 100%; object-fit: cover; }
-.photo-label { font-size: 10px; color: var(--text3); text-align: center; padding: 0 4px; }
-.form-actions {
-  display: grid; grid-template-columns: 1fr 1fr; gap: 10px;
-  padding: 12px 16px;
-  border-top: 1px solid var(--border);
-  background: var(--bg);
-  flex-shrink: 0;
-}
-.btn-save {
-  background: var(--accent);
-  color: #0f172a;
-  border: none;
-  border-radius: var(--radius-sm);
-  padding: 14px;
-  font-size: 14px;
-  font-weight: 500;
-  font-family: var(--font-display);
-  cursor: pointer;
-  transition: opacity .15s;
-}
-.btn-save:active { opacity: 0.8; }
-.btn-dup {
-  background: var(--orange-dim);
-  color: var(--orange);
-  border: 1px solid var(--orange);
-  border-radius: var(--radius-sm);
-  padding: 14px;
-  font-size: 14px;
-  font-weight: 500;
-  font-family: var(--font-display);
-  cursor: pointer;
-  display: flex; align-items: center; justify-content: center; gap: 6px;
-}
-.btn-dup:active { opacity: 0.8; }
-.btn-back {
-  background: transparent;
-  color: var(--text2);
-  border: 1px solid var(--border2);
-  border-radius: var(--radius-sm);
-  padding: 9px 14px;
-  font-size: 13px;
-  cursor: pointer;
-  display: flex; align-items: center; gap: 6px;
-}
+    .photos { display:flex; gap:10px; flex-wrap:wrap; margin-top:8px; }
+    .thumb { width:110px; border:1px solid #e5e7eb; border-radius:10px; overflow:hidden; background:#fff; }
+    .thumb img { display:block; width:100%; height:80px; object-fit:cover; }
+    .thumb div { font-size:11px; padding:6px; color:#374151; }
 
-/* ── PANIER SCREEN ── */
-#screen-panier { padding-bottom: var(--bottom-nav); overflow: hidden; }
-.panier-scroll { flex: 1; overflow-y: auto; padding: 12px; }
-.panier-actions {
-  padding: 12px 16px;
-  border-top: 1px solid var(--border);
-  background: var(--bg);
-  flex-shrink: 0;
-  display: flex; gap: 10px;
-}
-.btn-masse {
-  flex: 1;
-  background: var(--orange-dim);
-  color: var(--orange);
-  border: 1px solid var(--orange);
-  border-radius: var(--radius-sm);
-  padding: 13px;
-  font-size: 14px;
-  font-weight: 500;
-  cursor: pointer;
-}
-.btn-vider {
-  background: var(--red-dim);
-  color: var(--red);
-  border: 1px solid var(--red);
-  border-radius: var(--radius-sm);
-  padding: 13px 16px;
-  font-size: 13px;
-  font-weight: 500;
-  cursor: pointer;
-}
-.empty-state {
-  flex: 1;
-  display: flex; flex-direction: column; align-items: center; justify-content: center;
-  gap: 12px; padding: 2rem;
-}
-.empty-icon { opacity: 0.3; }
-.empty-text { font-size: 14px; color: var(--text2); text-align: center; }
-
-/* ── MODAL MASSE ── */
-.modal-overlay {
-  position: absolute; inset: 0;
-  background: rgba(0,0,0,0.6);
-  display: none; align-items: flex-end; justify-content: center;
-  z-index: 200;
-}
-.modal-overlay.open { display: flex; }
-.modal {
-  background: var(--bg2);
-  border: 1px solid var(--border2);
-  border-radius: var(--radius) var(--radius) 0 0;
-  padding: 20px 20px 32px;
-  width: 100%;
-  max-width: 500px;
-}
-.modal-title { font-family: var(--font-display); font-size: 16px; font-weight: 700; margin-bottom: 16px; }
-.modal-actions { display: grid; gap: 10px; margin-top: 16px; }
-.btn-modal-action {
-  background: var(--bg3);
-  border: 1px solid var(--border2);
-  border-radius: var(--radius-sm);
-  padding: 13px 16px;
-  font-size: 14px;
-  color: var(--text);
-  text-align: left;
-  cursor: pointer;
-  display: flex; align-items: center; gap: 10px;
-}
-.btn-cancel {
-  background: transparent;
-  border: none;
-  color: var(--text2);
-  font-size: 14px;
-  padding: 10px;
-  cursor: pointer;
-  text-align: center;
-  width: 100%;
-  margin-top: 4px;
-}
-
-/* ── TOAST ── */
-.toast {
-  position: absolute;
-  top: 70px; left: 50%; transform: translateX(-50%) translateY(-20px);
-  background: var(--bg2);
-  border: 1px solid var(--border2);
-  border-radius: 20px;
-  padding: 10px 18px;
-  font-size: 13px;
-  color: var(--text);
-  z-index: 300;
-  opacity: 0;
-  transition: all .3s;
-  white-space: nowrap;
-}
-.toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
-.toast.success { border-color: var(--green); color: var(--green); }
-.toast.error { border-color: var(--red); color: var(--red); }
-
-
-/* ── LASSO ── */
-.lasso-btn {
-  position: absolute;
-  top: 60px; left: 12px;
-  z-index: 50;
-  display: flex; flex-direction: column; gap: 8px;
-}
-.lasso-ctrl {
-  width: 40px; height: 40px;
-  background: var(--bg2);
-  border: 1px solid var(--border2);
-  border-radius: var(--radius-sm);
-  display: flex; align-items: center; justify-content: center;
-  cursor: pointer;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.3);
-  transition: all .15s;
-}
-.lasso-ctrl.active {
-  background: var(--accent-dim);
-  border-color: var(--accent);
-}
-.lasso-banner {
-  position: absolute;
-  top: 60px; left: 50%; transform: translateX(-50%);
-  background: var(--accent-dim);
-  border: 1px solid var(--accent);
-  border-radius: 20px;
-  padding: 8px 18px;
-  font-size: 13px;
-  color: var(--accent);
-  z-index: 60;
-  white-space: nowrap;
-  display: none;
-  font-weight: 500;
-}
-.lasso-banner.show { display: block; }
-/* Fix form buttons always visible */
-#screen-form { padding-bottom: 0; }
-.form-actions {
-  position: sticky;
-  bottom: 0;
-  z-index: 20;
-}
-
-/* ── OFFLINE BANNER ── */
-.offline-banner {
-  background: var(--orange-dim);
-  border-bottom: 1px solid var(--orange);
-  padding: 6px 16px;
-  font-size: 12px;
-  color: var(--orange);
-  text-align: center;
-  display: none;
-}
-.offline-banner.show { display: block; }
-
-/* ── LEAFLET CUSTOM ── */
-.custom-pin {
-  width: 28px; height: 28px;
-  border-radius: 50% 50% 50% 0;
-  transform: rotate(-45deg);
-  border: 2px solid white;
-  display: flex; align-items: center; justify-content: center;
-}
-.leaflet-popup-content-wrapper {
-  background: var(--bg2) !important;
-  border: 1px solid var(--border2) !important;
-  border-radius: var(--radius) !important;
-  box-shadow: 0 8px 32px rgba(0,0,0,0.4) !important;
-}
-.leaflet-popup-content { color: var(--text) !important; margin: 14px 16px !important; }
-.leaflet-popup-tip { background: var(--bg2) !important; }
-.popup-id { font-family: var(--font-mono); font-size: 11px; color: var(--accent); margin-bottom: 4px; }
-.popup-title { font-size: 14px; font-weight: 500; margin-bottom: 8px; }
-.popup-actions { display: flex; gap: 8px; margin-top: 10px; }
-.popup-btn {
-  flex: 1; padding: 8px; border-radius: 8px;
-  font-size: 12px; font-weight: 500; cursor: pointer;
-  border: none; text-align: center;
-}
-.popup-btn-edit { background: var(--accent-dim); color: var(--accent); border: 1px solid var(--accent); }
-.popup-btn-dup { background: var(--orange-dim); color: var(--orange); border: 1px solid var(--orange); }
-</style>
+    /* ===== Overlay export PDF ===== */
+    #pdfLoading {
+      position: fixed;
+      inset: 0;
+      background: rgba(17,24,39,.85);
+      color: white;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 9999;
+    }
+    #pdfLoading .box { text-align: center; }
+    #pdfLoading .spinner {
+      width: 42px;
+      height: 42px;
+      border: 4px solid rgba(255,255,255,.3);
+      border-top-color: white;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      margin: 0 auto 12px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
 </head>
+
 <body>
-
-<!-- TOAST -->
-<div class="toast" id="toast"></div>
-
-<!-- OFFLINE BANNER -->
-<div class="offline-banner" id="offline-banner">
-  <svg width="12" height="12" viewBox="0 0 12 12" fill="none" style="display:inline;vertical-align:middle;margin-right:4px"><path d="M1 1l10 10M3.5 2.5A6 6 0 0110.5 9" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
-  Mode hors-ligne — données sauvegardées localement
-</div>
-
-<!-- ══════════════════════════════════════════
-     ÉCRAN LOGIN
-══════════════════════════════════════════ -->
-<div class="screen active" id="screen-login">
-  <div class="login-logo">
-    <div class="logo-icon">
-      <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
-        <circle cx="14" cy="14" r="5" fill="#38bdf8"/>
-        <circle cx="14" cy="14" r="10" stroke="#38bdf8" stroke-width="1.5" opacity="0.4"/>
-        <circle cx="14" cy="14" r="13" stroke="#38bdf8" stroke-width="1" opacity="0.2"/>
-      </svg>
-    </div>
-    <h1>Audit EP</h1>
-    <p>Éclairage Public · Terrain connecté</p>
-  </div>
-  <div class="login-card">
-    <div class="field-group">
-      <label class="field-label">Prénom</label>
-      <input class="field-input" id="login-prenom" type="text" placeholder="ex: Martin" autocomplete="given-name">
-    </div>
-    <div class="field-group">
-      <label class="field-label">Nom</label>
-      <input class="field-input" id="login-nom" type="text" placeholder="ex: Dupont" autocomplete="family-name">
-    </div>
-    <div class="field-group">
-      <label class="field-label">Chantier</label>
-      <select class="field-select" id="login-chantier">
-        <option value="">-- Sélectionner --</option>
-        <option>Ménilles</option>
-        <option>Béziers Sud</option>
-        <option>Montpellier Est</option>
-        <option>Nîmes Centre</option>
-      </select>
-    </div>
-    <button class="btn-primary" onclick="doLogin()">Commencer l'audit</button>
-  </div>
-</div>
-
-<!-- ══════════════════════════════════════════
-     ÉCRAN CARTE
-══════════════════════════════════════════ -->
-<div class="screen" id="screen-map">
-  <div class="topbar">
+<header>
+  <div style="max-width:980px;margin:0 auto; display:flex; align-items:center; gap:14px;">
+    <img src="logo.png" alt="Logo entreprise" style="height:48px; object-fit:contain;" />
     <div>
-      <div class="topbar-title" id="map-chantier-label">Chantier</div>
-      <div class="topbar-sub" id="map-technicien-label">Technicien</div>
-    </div>
-    <div class="topbar-badge" id="map-count-badge">0 pts</div>
-    <div class="icon-btn" onclick="centerOnMe()">
-      <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="#94a3b8" stroke-width="1.5" stroke-linecap="round">
-        <circle cx="9" cy="9" r="3"/><path d="M9 1v3M9 14v3M1 9h3M14 9h3"/>
-      </svg>
+      <div style="font-weight:700;">Réception de chantier</div>
+      <div class="small">Fiche des points non conformes</div>
     </div>
   </div>
-  <div id="map"></div>
+</header>
 
-  <div class="lasso-banner" id="lasso-banner">Dessinez autour des points à sélectionner</div>
-  <div class="lasso-btn">
-    <div class="lasso-ctrl" id="lasso-btn" onclick="toggleLasso()" title="Lasso">
-      <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="#94a3b8" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M10 3C6 3 2 5.5 2 9c0 2.5 2 4 4 4h1l1 4 1-4h1c3 0 5-1.5 5-4 0-2-1.5-3.5-3-4.5"/>
-        <path d="M14 6c1 .8 2 2 2 3.5" opacity=".5"/>
-      </svg>
-    </div>
-    <div class="lasso-ctrl" id="lasso-clear-btn" onclick="clearLassoSelection()" title="Effacer sélection" style="display:none">
-      <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="#f87171" stroke-width="1.5" stroke-linecap="round"><path d="M4 4l10 10M14 4L4 14"/></svg>
-    </div>
-  </div>
+<main>
+  <!-- CHANTIER -->
+  <section class="card" id="chantierCard">
+    <h3 style="margin:0 0 10px 0;">1) Infos chantier</h3>
 
-  <div class="map-controls">
-    <div class="map-ctrl-btn" onclick="map.zoomIn()">
-      <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="#94a3b8" stroke-width="1.5" stroke-linecap="round"><path d="M9 4v10M4 9h10"/></svg>
-    </div>
-    <div class="map-ctrl-btn" onclick="map.zoomOut()">
-      <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="#94a3b8" stroke-width="1.5" stroke-linecap="round"><path d="M4 9h10"/></svg>
-    </div>
-  </div>
-  <div class="map-fab" onclick="showForm(null)">
-    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#0f172a" stroke-width="2.5" stroke-linecap="round"><path d="M12 4v16M4 12h16"/></svg>
-  </div>
-</div>
+    <div class="row">
+      <div>
+        <label>Projet / Affaire</label>
+        <input id="projet" placeholder="Ex: EP - Commune X - 2026" />
+      </div>
 
-<!-- ══════════════════════════════════════════
-     ÉCRAN LISTE
-══════════════════════════════════════════ -->
-<div class="screen" id="screen-list">
-  <div class="topbar">
-    <div style="flex:1">
-      <div class="topbar-title">Points lumineux</div>
-      <div class="topbar-sub" id="list-sub">0 points</div>
-    </div>
-    <div class="icon-btn" onclick="showForm(null)">
-      <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="#94a3b8" stroke-width="1.5" stroke-linecap="round"><path d="M9 3v12M3 9h12"/></svg>
-    </div>
-  </div>
-  <div class="list-scroll" id="list-scroll"></div>
-</div>
+      <div>
+        <label>Commune</label>
+        <input id="commune" placeholder="Ex: Nérac" />
+      </div>
 
-<!-- ══════════════════════════════════════════
-     ÉCRAN FORMULAIRE
-══════════════════════════════════════════ -->
-<div class="screen" id="screen-form">
-  <div class="topbar">
-    <button class="btn-back" onclick="goBack()">
-      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M10 3L5 8l5 5"/></svg>
-      Retour
-    </button>
-    <div style="flex:1;text-align:center">
-      <div class="topbar-title" id="form-title">Nouveau point</div>
-      <div class="topbar-sub" id="form-id-label"></div>
-    </div>
-    <div style="width:70px"></div>
-  </div>
-  <div class="form-scroll" style="padding-bottom: 0">
+      <div>
+        <label>Adresse / Zone</label>
+        <input id="zone" placeholder="Ex: Rue X" />
+      </div>
 
-    <div class="form-section-title">Localisation GPS</div>
-    <div class="form-row">
-      <div class="gps-row">
-        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="#4ade80" stroke-width="1.5"><circle cx="8" cy="7" r="2.5"/><path d="M8 1a6 6 0 010 12C5 13 2 10 2 7a6 6 0 016-6z"/></svg>
-        <div class="gps-coords empty" id="gps-display">Appuyer pour capturer</div>
-        <button class="gps-btn" onclick="captureGPS()">📍 GPS</button>
+      <div>
+        <label>Date</label>
+        <input id="date" type="date" />
+      </div>
+
+      <div>
+        <label>Poseur</label>
+        <select id="poseur">
+          <option value="">— Sélectionner —</option>
+          <option value="ELECTROMONTAGE">ELECTROMONTAGE</option>
+          <option value="SPIE">SPIE</option>
+          <option value="BYES">BYES</option>
+          <option value="INEO">INEO</option>
+          <option value="__autre__">Autre…</option>
+        </select>
+      </div>
+
+      <div id="poseurAutreWrap" style="display:none;">
+        <label>Nom du poseur</label>
+        <input id="poseurAutre" placeholder="Saisir le nom" />
+      </div>
+
+      <div>
+        <label>Chef d’équipe</label>
+        <input id="chef" placeholder="Nom" />
+      </div>
+
+      <div>
+        <label>Contrôleur</label>
+        <select id="controleur">
+          <option value="">— Sélectionner —</option>
+          <option value="Neals Volante">Neals Volante</option>
+          <option value="Tony Diniz">Tony Diniz</option>
+          <option value="Quentin Gobbato">Quentin Gobbato</option>
+          <option value="Virgil Delbrel">Virgil Delbrel</option>
+          <option value="__autre__">Autre…</option>
+        </select>
+      </div>
+
+      <div id="controleurAutreWrap" style="display:none;">
+        <label>Nom du contrôleur</label>
+        <input id="controleurAutre" placeholder="Saisir le nom" />
       </div>
     </div>
 
-    <div class="form-section-title">Support</div>
-    <div class="form-row">
-      <div class="form-label">Nombre de supports</div>
-      <input class="form-input" type="number" id="f-nbr-supports" placeholder="1" min="1" max="10">
-    </div>
-    <div class="form-row">
-      <div class="form-label">Type de support <span class="req">●</span></div>
-      <select class="form-select" id="f-type-support">
-        <option value="">-- Sélectionner --</option>
-        <option>Mât droit</option>
-        <option>Console</option>
-        <option>Potence</option>
-        <option>Candélabre</option>
-        <option>Encastré sol</option>
-        <option>Façade</option>
-      </select>
-    </div>
-    <div class="form-row">
-      <div class="form-label">État du support <span class="req">●</span></div>
-      <select class="form-select" id="f-etat-support">
-        <option value="">-- Sélectionner --</option>
-        <option>Bon</option>
-        <option>Moyen</option>
-        <option>Mauvais</option>
-        <option>À remplacer</option>
-      </select>
-    </div>
-    <div class="form-row">
-      <div class="form-label">Hauteur (m)</div>
-      <input class="form-input" type="number" id="f-hauteur" placeholder="6" min="1" max="20">
-    </div>
-    <div class="form-row">
-      <div class="form-label">Type d'attache</div>
-      <select class="form-select" id="f-type-attache">
-        <option value="">-- Sélectionner --</option>
-        <option>Bride</option>
-        <option>Crosse</option>
-        <option>Platine</option>
-        <option>Direct</option>
-      </select>
-    </div>
-
-    <div class="form-section-title">Luminaire</div>
-    <div class="form-row">
-      <div class="form-label">Nombre de luminaires</div>
-      <input class="form-input" type="number" id="f-nbr-luminaires" placeholder="1" min="1" max="4">
-    </div>
-    <div class="form-row">
-      <div class="form-label">Type de luminaire</div>
-      <select class="form-select" id="f-type-luminaire">
-        <option value="">-- Sélectionner --</option>
-        <option>Lanterne</option>
-        <option>Projecteur</option>
-        <option>Hublot</option>
-        <option>Borne</option>
-        <option>Applique</option>
-        <option>Globe</option>
-      </select>
-    </div>
-    <div class="form-row">
-      <div class="form-label">État luminaire</div>
-      <select class="form-select" id="f-etat-luminaire">
-        <option value="">-- Sélectionner --</option>
-        <option>Bon</option>
-        <option>Moyen</option>
-        <option>Mauvais</option>
-        <option>À remplacer</option>
-      </select>
-    </div>
-    <div class="form-row">
-      <div class="form-label">Technologie</div>
-      <select class="form-select" id="f-technologie">
-        <option value="">-- Sélectionner --</option>
-        <option>LED</option>
-        <option>Sodium HP</option>
-        <option>Sodium BP</option>
-        <option>Iodures métalliques</option>
-        <option>Fluo compact</option>
-        <option>Inconnue</option>
-      </select>
-    </div>
-    <div class="form-row">
-      <div class="form-label">Puissance (W)</div>
-      <input class="form-input" type="number" id="f-puissance" placeholder="40" min="1" max="1000">
-    </div>
-
-    <div class="form-section-title">Photos</div>
-    <div class="photo-grid">
-      <div class="photo-slot" id="photo-luminaire" onclick="takePhoto('luminaire')">
-        <svg width="22" height="22" viewBox="0 0 22 22" fill="none" stroke="#64748b" stroke-width="1.5"><rect x="2" y="6" width="18" height="13" rx="3"/><circle cx="11" cy="13" r="3"/><path d="M8 6l1.5-3h3L14 6"/></svg>
-        <div class="photo-label">Luminaire</div>
+    <!-- MES FICHES -->
+    <div class="row" style="margin-top:12px;">
+      <div>
+        <label>📂 Mes fiches</label>
+        <select id="ficheSelect"></select>
+        <div class="small" style="margin-top:6px;">Conseil : duplique une fiche “type”, puis modifie.</div>
       </div>
-      <div class="photo-slot" id="photo-mat" onclick="takePhoto('mat')">
-        <svg width="22" height="22" viewBox="0 0 22 22" fill="none" stroke="#64748b" stroke-width="1.5"><rect x="2" y="6" width="18" height="13" rx="3"/><circle cx="11" cy="13" r="3"/><path d="M8 6l1.5-3h3L14 6"/></svg>
-        <div class="photo-label">Mât</div>
-      </div>
-      <div class="photo-slot" id="photo-classe2" onclick="takePhoto('classe2')">
-        <svg width="22" height="22" viewBox="0 0 22 22" fill="none" stroke="#64748b" stroke-width="1.5"><rect x="2" y="6" width="18" height="13" rx="3"/><circle cx="11" cy="13" r="3"/><path d="M8 6l1.5-3h3L14 6"/></svg>
-        <div class="photo-label">Classe 2</div>
+
+      <div>
+        <label>Actions fiche</label>
+        <div class="btnrow">
+          <button class="btn secondary" id="newFicheBtn" type="button">➕ Nouvelle</button>
+          <button class="btn" id="saveFicheBtn" type="button">💾 Sauver</button>
+          <button class="btn secondary" id="dupFicheBtn" type="button">📄 Dupliquer</button>
+          <button class="btn danger" id="delFicheBtn" type="button">🗑️ Supprimer</button>
+        </div>
       </div>
     </div>
 
-    <div class="form-section-title">Panier & Observations</div>
-    <div class="form-row">
-      <div class="toggle-row">
-        <span class="toggle-label">Dans le panier</span>
-        <div class="toggle" id="toggle-panier" onclick="togglePanier()"></div>
+    <div class="btnrow" style="margin-top:12px;">
+      <button class="btn" id="addPointBtn" type="button">➕ Ajouter un point non conforme</button>
+      <button class="btn secondary" id="pdfBtn" type="button">🧾 Exporter PDF</button>
+      <button class="btn danger" id="resetBtn" type="button">🧽 Vider la fiche (courante)</button>
+    </div>
+  </section>
+
+  <!-- POINTS -->
+  <section id="pointsWrap"></section>
+
+  <!-- SYNTHESE + SIGNATURES -->
+  <section class="card" id="syntheseCard">
+    <h3 style="margin:0 0 10px 0;">2) Synthèse</h3>
+    <div id="syntheseText" class="small"></div>
+
+    <hr style="border:none;border-top:1px solid #e5e7eb;margin:14px 0;">
+
+    <h4 style="margin:0 0 10px 0;">Signatures</h4>
+
+    <div class="row">
+      <div>
+        <label>Contrôleur</label>
+        <canvas id="sigControleur" width="420" height="160"
+          style="border:1px solid #d1d5db;border-radius:10px;background:#fff; touch-action:none;"></canvas>
+        <div class="btnrow" style="margin-top:8px;">
+          <button class="btn danger" type="button" id="clearSigControleur">Effacer</button>
+        </div>
+      </div>
+
+      <div>
+        <label>Entreprise</label>
+        <canvas id="sigEntreprise" width="420" height="160"
+          style="border:1px solid #d1d5db;border-radius:10px;background:#fff; touch-action:none;"></canvas>
+        <div class="btnrow" style="margin-top:8px;">
+          <button class="btn danger" type="button" id="clearSigEntreprise">Effacer</button>
+        </div>
+      </div>
+
+      <div>
+        <label>Client</label>
+        <canvas id="sigClient" width="420" height="160"
+          style="border:1px solid #d1d5db;border-radius:10px;background:#fff; touch-action:none;"></canvas>
+        <div class="btnrow" style="margin-top:8px;">
+          <button class="btn danger" type="button" id="clearSigClient">Effacer</button>
+        </div>
       </div>
     </div>
-    <div class="form-row">
-      <div class="form-label">Observations</div>
-      <textarea class="form-input" id="f-observations" rows="3" placeholder="Notes libres..."></textarea>
-    </div>
+  </section>
+</main>
 
-  </div>
-  <div class="form-actions">
-    <button class="btn-dup" onclick="dupliquerPoint()">
-      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><rect x="5" y="4" width="8" height="9" rx="2"/><path d="M3 12V3a2 2 0 012-2h6"/></svg>
-      Dupliquer + GPS
-    </button>
-    <button class="btn-save" onclick="savePoint()">Enregistrer</button>
+<!-- Overlay -->
+<div id="pdfLoading">
+  <div class="box">
+    <div class="spinner"></div>
+    <div>Génération du PDF…</div>
   </div>
 </div>
 
-<!-- ══════════════════════════════════════════
-     ÉCRAN PANIER
-══════════════════════════════════════════ -->
-<div class="screen" id="screen-panier">
-  <div class="topbar">
-    <div style="flex:1">
-      <div class="topbar-title">Panier</div>
-      <div class="topbar-sub" id="panier-sub">0 points sélectionnés</div>
-    </div>
-  </div>
-  <div class="panier-scroll" id="panier-scroll"></div>
-  <div class="panier-actions">
-    <button class="btn-masse" onclick="openModalMasse()">Modifier en masse</button>
-    <button class="btn-vider" onclick="viderPanier()">Vider</button>
-  </div>
-</div>
+<!-- html2canvas (global html2canvas) -->
+<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+<!-- jsPDF UMD (global window.jspdf.jsPDF) -->
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
 
-<!-- ══════════════════════════════════════════
-     BOTTOM NAV
-══════════════════════════════════════════ -->
-<div class="bottom-nav" id="bottom-nav" style="display:none">
-  <div class="nav-item active" id="nav-map" onclick="showScreen('map')">
-    <svg viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="1.8" stroke-linecap="round"><path d="M3 5l6-2 6 2 6-2v14l-6 2-6-2-6 2V5z"/><path d="M9 3v14M15 5v14"/></svg>
-    <span class="nav-label">Carte</span>
-  </div>
-  <div class="nav-item" id="nav-list" onclick="showScreen('list')">
-    <svg viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="1.8" stroke-linecap="round"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>
-    <span class="nav-label">Liste</span>
-  </div>
-  <div class="nav-item" id="nav-panier" onclick="showScreen('panier')">
-    <svg viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="1.8" stroke-linecap="round"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4zM3 6h18"/><path d="M16 10a4 4 0 01-8 0"/></svg>
-    <span class="nav-label">Panier</span>
-  </div>
-</div>
-
-<!-- ══════════════════════════════════════════
-     MODAL MODIFICATION EN MASSE
-══════════════════════════════════════════ -->
-<div class="modal-overlay" id="modal-masse" onclick="closeModalMasse(event)">
-  <div class="modal">
-    <div class="modal-title">Modifier en masse</div>
-    <div class="form-row">
-      <div class="form-label">Champ à modifier</div>
-      <select class="form-select" id="masse-field">
-        <option value="">-- Sélectionner --</option>
-        <option value="f-etat-support">État du support</option>
-        <option value="f-etat-luminaire">État luminaire</option>
-        <option value="f-technologie">Technologie</option>
-        <option value="f-type-luminaire">Type de luminaire</option>
-      </select>
-    </div>
-    <div class="form-row" id="masse-value-row" style="display:none">
-      <div class="form-label">Nouvelle valeur</div>
-      <select class="form-select" id="masse-value"></select>
-    </div>
-    <div class="modal-actions">
-      <button class="btn-modal-action" onclick="applyMasse()" style="background:var(--orange-dim);color:var(--orange);border-color:var(--orange)">
-        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M2 8l4 4 8-8"/></svg>
-        Appliquer aux <span id="masse-count">0</span> points du panier
-      </button>
-    </div>
-    <button class="btn-cancel" onclick="closeModalMasse()">Annuler</button>
-  </div>
-</div>
-
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
-// ── STATE ──
-let state = {
-  technicien: '',
-  chantier: '',
-  points: [],
-  currentPoint: null,
-  previousScreen: 'map',
-  panierInForm: false,
-  photos: { luminaire: null, mat: null, classe2: null }
+/* =========================
+   Stockage
+   - Fiches (state) : localStorage (plusieurs fiches)
+   - Photos : IndexedDB
+========================= */
+
+const LS_KEY_FALLBACK = "reception_lampadaire_state_fallback_v1"; // ancien fallback
+const FICHES_INDEX_KEY = "FL_FICHES_INDEX_V1";
+const CURRENT_FICHE_KEY = "FL_CURRENT_FICHE_ID_V1";
+
+const DB_NAME = "reception_lampadaire_photos_v1";
+const DB_STORE = "photos";
+
+const byId = (id) => document.getElementById(id);
+const ficheStorageKey = (id) => `FL_FICHE_${id}`;
+
+const newId = (prefix="id") =>
+  `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2,8)}`;
+
+const todayISO = () => {
+  const d = new Date();
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
 };
 
-// ── OFFLINE ──
-function updateOfflineBanner() {
-  document.getElementById('offline-banner').classList.toggle('show', !navigator.onLine);
-}
-window.addEventListener('online', updateOfflineBanner);
-window.addEventListener('offline', updateOfflineBanner);
-
-// ── TOAST ──
-function showToast(msg, type='') {
-  const t = document.getElementById('toast');
-  t.textContent = msg;
-  t.className = 'toast show ' + type;
-  setTimeout(() => t.className = 'toast', 2500);
+function escapeHtml(str){
+  return String(str ?? "")
+    .replaceAll("&","&amp;")
+    .replaceAll("<","&lt;")
+    .replaceAll(">","&gt;")
+    .replaceAll('"',"&quot;")
+    .replaceAll("'","&#039;");
 }
 
-// ── LOCAL STORAGE ──
-function saveLocal() {
-  try { localStorage.setItem('audit_ep_points', JSON.stringify(state.points)); } catch(e) {}
-}
-function loadLocal() {
-  try {
-    const d = localStorage.getItem('audit_ep_points');
-    if (d) state.points = JSON.parse(d);
-  } catch(e) {}
-}
+const makeFicheLabel = (st) => {
+  const proj = (st?.chantier?.projet || "").trim();
+  const com = (st?.chantier?.commune || "").trim();
+  const d = (st?.chantier?.date || "").trim();
+  const base = [proj, com, d].filter(Boolean).join(" — ");
+  return base || "Fiche sans nom";
+};
 
-// ── LOGIN ──
-function doLogin() {
-  const prenom = document.getElementById('login-prenom').value.trim();
-  const nom = document.getElementById('login-nom').value.trim();
-  const chantier = document.getElementById('login-chantier').value;
-  if (!prenom || !nom || !chantier) { showToast('Remplissez tous les champs', 'error'); return; }
-  state.technicien = prenom + ' ' + nom;
-  state.chantier = chantier;
-  loadLocal();
-  document.getElementById('map-chantier-label').textContent = chantier;
-  document.getElementById('map-technicien-label').textContent = state.technicien;
-  document.getElementById('bottom-nav').style.display = 'flex';
-  showScreen('map');
-  initMap();
-}
-
-// ── SCREENS ──
-let currentScreen = 'login';
-function showScreen(name) {
-  if (name !== 'form') state.previousScreen = currentScreen;
-  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
-  document.getElementById('screen-' + name).classList.add('active');
-  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
-  const navEl = document.getElementById('nav-' + name);
-  if (navEl) navEl.classList.add('active');
-  currentScreen = name;
-  if (name === 'list') renderList();
-  if (name === 'panier') renderPanier();
-  if (name === 'map') refreshMapMarkers();
-}
-function goBack() { showScreen(state.previousScreen); }
-
-// ── MAP ──
-let map, markersLayer;
-function initMap() {
-  map = L.map('map', { zoomControl: false, attributionControl: false }).setView([49.037, 1.371], 14);
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
-  markersLayer = L.layerGroup().addTo(map);
-  loadFromSheets();
-  centerOnMe();
-}
-
-function getMarkerColor(pt) {
-  if (pt.dansPanier) return '#fb923c';
-  const etat = pt.etatSupport || '';
-  if (etat === 'Bon') return '#4ade80';
-  if (etat === 'Moyen') return '#facc15';
-  if (etat === 'Mauvais' || etat === 'À remplacer') return '#f87171';
-  return '#38bdf8';
-}
-
-function refreshMapMarkers() {
-  if (!markersLayer) return;
-  markersLayer.clearLayers();
-  state.points.forEach(pt => {
-    if (!pt.lat || !pt.lng) return;
-    const color = getMarkerColor(pt);
-    const icon = L.divIcon({
-      className: '',
-      html: `<div style="width:14px;height:14px;border-radius:50%;background:${color};border:2px solid white;box-shadow:0 2px 6px rgba(0,0,0,0.4)"></div>`,
-      iconSize: [14,14], iconAnchor: [7,7]
-    });
-    const marker = L.marker([pt.lat, pt.lng], { icon }).addTo(markersLayer);
-    marker.bindPopup(`
-      <div class="popup-id">${pt.id}</div>
-      <div class="popup-title">${pt.typeSupport || 'Point lumineux'}</div>
-      <div style="font-size:12px;color:#94a3b8">${pt.technologie || ''} ${pt.puissance ? pt.puissance+'W' : ''}</div>
-      <div class="popup-actions">
-        <button class="popup-btn popup-btn-edit" onclick="editFromMap('${pt.id}')">Modifier</button>
-        <button class="popup-btn popup-btn-dup" onclick="dupFromMap('${pt.id}')">Dupliquer</button>
-      </div>
-    `, { maxWidth: 220 });
-  });
-  document.getElementById('map-count-badge').textContent = state.points.length + ' pts';
-}
-
-function centerOnMe() {
-  if (!navigator.geolocation) return;
-  navigator.geolocation.getCurrentPosition(pos => {
-    if (map) map.setView([pos.coords.latitude, pos.coords.longitude], 16);
-  });
-}
-
-function editFromMap(id) {
-  const pt = state.points.find(p => p.id === id);
-  if (pt) { map.closePopup(); showForm(pt); }
-}
-function dupFromMap(id) {
-  const pt = state.points.find(p => p.id === id);
-  if (pt) { map.closePopup(); dupliquerPointData(pt); }
-}
-
-// ── FORM ──
-let editingId = null;
-function generateId() {
-  return 'PL-' + Date.now().toString(36).toUpperCase().slice(-6);
-}
-
-function showForm(pt) {
-  editingId = pt ? pt.id : null;
-  state.photos = { luminaire: null, mat: null, classe2: null };
-  state.panierInForm = pt ? (pt.dansPanier || false) : false;
-
-  document.getElementById('form-title').textContent = pt ? 'Modifier point' : 'Nouveau point';
-  document.getElementById('form-id-label').textContent = pt ? pt.id : '';
-  document.getElementById('f-nbr-supports').value = pt ? (pt.nbrSupports || '') : '';
-  document.getElementById('f-type-support').value = pt ? (pt.typeSupport || '') : '';
-  document.getElementById('f-etat-support').value = pt ? (pt.etatSupport || '') : '';
-  document.getElementById('f-hauteur').value = pt ? (pt.hauteur || '') : '';
-  document.getElementById('f-type-attache').value = pt ? (pt.typeAttache || '') : '';
-  document.getElementById('f-nbr-luminaires').value = pt ? (pt.nbrLuminaires || '') : '';
-  document.getElementById('f-type-luminaire').value = pt ? (pt.typeLuminaire || '') : '';
-  document.getElementById('f-etat-luminaire').value = pt ? (pt.etatLuminaire || '') : '';
-  document.getElementById('f-technologie').value = pt ? (pt.technologie || '') : '';
-  document.getElementById('f-puissance').value = pt ? (pt.puissance || '') : '';
-  document.getElementById('f-observations').value = pt ? (pt.observations || '') : '';
-
-  const toggle = document.getElementById('toggle-panier');
-  toggle.classList.toggle('on', state.panierInForm);
-
-  const gpsEl = document.getElementById('gps-display');
-  if (pt && pt.lat) {
-    gpsEl.textContent = pt.lat.toFixed(6) + ', ' + pt.lng.toFixed(6);
-    gpsEl.classList.remove('empty');
-  } else {
-    gpsEl.textContent = 'Appuyer pour capturer';
-    gpsEl.classList.add('empty');
-  }
-  ['luminaire','mat','classe2'].forEach(k => {
-    const slot = document.getElementById('photo-' + k);
-    slot.innerHTML = `<svg width="22" height="22" viewBox="0 0 22 22" fill="none" stroke="#64748b" stroke-width="1.5"><rect x="2" y="6" width="18" height="13" rx="3"/><circle cx="11" cy="13" r="3"/><path d="M8 6l1.5-3h3L14 6"/></svg><div class="photo-label">${k==='mat'?'Mât':k==='classe2'?'Classe 2':'Luminaire'}</div>`;
-    slot.onclick = () => takePhoto(k);
-  });
-
-  showScreen('form');
-}
-
-let currentGPSLat = null, currentGPSLng = null;
-function captureGPS() {
-  const btn = document.querySelector('.gps-btn');
-  btn.textContent = '⏳ ...';
-  navigator.geolocation.getCurrentPosition(pos => {
-    currentGPSLat = pos.coords.latitude;
-    currentGPSLng = pos.coords.longitude;
-    const el = document.getElementById('gps-display');
-    el.textContent = currentGPSLat.toFixed(6) + ', ' + currentGPSLng.toFixed(6);
-    el.classList.remove('empty');
-    btn.textContent = '✓ OK';
-    setTimeout(() => btn.textContent = '📍 GPS', 1500);
-    showToast('Position capturée', 'success');
-  }, () => {
-    btn.textContent = '📍 GPS';
-    showToast('GPS indisponible', 'error');
-  }, { enableHighAccuracy: true, timeout: 10000 });
-}
-
-function togglePanier() {
-  state.panierInForm = !state.panierInForm;
-  document.getElementById('toggle-panier').classList.toggle('on', state.panierInForm);
-}
-
-function takePhoto(type) {
-  const input = document.createElement('input');
-  input.type = 'file'; input.accept = 'image/*'; input.capture = 'environment';
-  input.onchange = e => {
-    const file = e.target.files[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = ev => {
-      state.photos[type] = ev.target.result;
-      const slot = document.getElementById('photo-' + type);
-      slot.innerHTML = `<img src="${ev.target.result}" alt="">`;
-    };
-    reader.readAsDataURL(file);
+/* ===== IndexedDB helpers ===== */
+const openDB = () => new Promise((resolve, reject) => {
+  const req = indexedDB.open(DB_NAME, 1);
+  req.onupgradeneeded = () => {
+    const db = req.result;
+    if (!db.objectStoreNames.contains(DB_STORE)) {
+      const store = db.createObjectStore(DB_STORE, { keyPath: "id" });
+      store.createIndex("pointId", "pointId", { unique:false });
+    }
   };
-  input.click();
-}
-
-function getFormData() {
-  const existing = editingId ? state.points.find(p => p.id === editingId) : null;
-  const lat = currentGPSLat || (existing ? existing.lat : null);
-  const lng = currentGPSLng || (existing ? existing.lng : null);
-  return {
-    id: editingId || generateId(),
-    chantier: state.chantier,
-    technicien: state.technicien,
-    date: new Date().toISOString().split('T')[0],
-    lat, lng,
-    nbrSupports: document.getElementById('f-nbr-supports').value,
-    typeSupport: document.getElementById('f-type-support').value,
-    etatSupport: document.getElementById('f-etat-support').value,
-    hauteur: document.getElementById('f-hauteur').value,
-    typeAttache: document.getElementById('f-type-attache').value,
-    nbrLuminaires: document.getElementById('f-nbr-luminaires').value,
-    typeLuminaire: document.getElementById('f-type-luminaire').value,
-    etatLuminaire: document.getElementById('f-etat-luminaire').value,
-    technologie: document.getElementById('f-technologie').value,
-    puissance: document.getElementById('f-puissance').value,
-    observations: document.getElementById('f-observations').value,
-    dansPanier: state.panierInForm,
-    photos: state.photos
-  };
-}
-
-function savePoint() {
-  const data = getFormData();
-  if (!data.typeSupport) { showToast('Sélectionnez un type de support', 'error'); return; }
-  if (editingId) {
-    const idx = state.points.findIndex(p => p.id === editingId);
-    if (idx >= 0) state.points[idx] = data;
-  } else {
-    state.points.push(data);
-  }
-  currentGPSLat = null; currentGPSLng = null;
-  saveLocal();
-  syncPointToSheets(data);
-  refreshMapMarkers();
-  showToast('Point enregistré ✓', 'success');
-  goBack();
-}
-
-function dupliquerPoint() {
-  const data = getFormData();
-  savePoint();
-  setTimeout(() => dupliquerPointData(data), 300);
-}
-
-function dupliquerPointData(source) {
-  editingId = null;
-  currentGPSLat = null; currentGPSLng = null;
-  state.photos = { luminaire: null, mat: null, classe2: null };
-  state.panierInForm = false;
-
-  document.getElementById('form-title').textContent = 'Dupliquer — GPS requis';
-  document.getElementById('form-id-label').textContent = 'Nouveau point';
-  document.getElementById('f-nbr-supports').value = source.nbrSupports || '';
-  document.getElementById('f-type-support').value = source.typeSupport || '';
-  document.getElementById('f-etat-support').value = source.etatSupport || '';
-  document.getElementById('f-hauteur').value = source.hauteur || '';
-  document.getElementById('f-type-attache').value = source.typeAttache || '';
-  document.getElementById('f-nbr-luminaires').value = source.nbrLuminaires || '';
-  document.getElementById('f-type-luminaire').value = '';
-  document.getElementById('f-etat-luminaire').value = '';
-  document.getElementById('f-technologie').value = '';
-  document.getElementById('f-puissance').value = '';
-  document.getElementById('f-observations').value = '';
-  document.getElementById('toggle-panier').classList.remove('on');
-
-  const gpsEl = document.getElementById('gps-display');
-  gpsEl.textContent = 'Appuyer pour capturer';
-  gpsEl.classList.add('empty');
-
-  ['luminaire','mat','classe2'].forEach(k => {
-    const slot = document.getElementById('photo-' + k);
-    slot.innerHTML = `<svg width="22" height="22" viewBox="0 0 22 22" fill="none" stroke="#64748b" stroke-width="1.5"><rect x="2" y="6" width="18" height="13" rx="3"/><circle cx="11" cy="13" r="3"/><path d="M8 6l1.5-3h3L14 6"/></svg><div class="photo-label">${k==='mat'?'Mât':k==='classe2'?'Classe 2':'Luminaire'}</div>`;
-    slot.onclick = () => takePhoto(k);
-  });
-
-  showScreen('form');
-  showToast('Champs copiés — capturez le GPS', 'success');
-  setTimeout(() => captureGPS(), 500);
-}
-
-// ── LIST ──
-function renderList() {
-  const scroll = document.getElementById('list-scroll');
-  document.getElementById('list-sub').textContent = state.points.length + ' points · ' + state.chantier;
-  if (!state.points.length) {
-    scroll.innerHTML = `<div class="empty-state"><div class="empty-icon"><svg width="48" height="48" viewBox="0 0 48 48" fill="none" stroke="#94a3b8" stroke-width="1.5"><circle cx="24" cy="24" r="20"/><path d="M24 14v10l6 6"/></svg></div><div class="empty-text">Aucun point relevé<br>sur ce chantier</div></div>`;
-    return;
-  }
-  scroll.innerHTML = state.points.map(pt => `
-    <div class="list-item" onclick="showForm(state.points.find(p=>p.id==='${pt.id}'))">
-      <div class="list-item-dot" style="background:${getMarkerColor(pt)}"></div>
-      <div class="list-item-info">
-        <div class="list-item-id">${pt.id}</div>
-        <div class="list-item-title">${pt.typeSupport || 'Point lumineux'}</div>
-        <div class="list-item-sub">${pt.technologie || '—'} · ${pt.puissance ? pt.puissance+'W' : '—'} · ${pt.etatSupport || '—'}</div>
-      </div>
-      ${pt.dansPanier ? '<div class="panier-badge">Panier</div>' : ''}
-      <div class="list-item-arrow">›</div>
-    </div>
-  `).join('');
-}
-
-// ── PANIER ──
-function renderPanier() {
-  const pts = state.points.filter(p => p.dansPanier);
-  document.getElementById('panier-sub').textContent = pts.length + ' point' + (pts.length>1?'s':'') + ' sélectionné' + (pts.length>1?'s':'');
-  document.getElementById('masse-count').textContent = pts.length;
-  const scroll = document.getElementById('panier-scroll');
-  if (!pts.length) {
-    scroll.innerHTML = `<div class="empty-state"><div class="empty-icon"><svg width="48" height="48" viewBox="0 0 48 48" fill="none" stroke="#94a3b8" stroke-width="1.5"><path d="M12 4L6 12v28a4 4 0 004 4h28a4 4 0 004-4V12l-6-8zM6 12h36"/><path d="M32 20a8 8 0 01-16 0"/></svg></div><div class="empty-text">Panier vide<br>Cochez "Dans le panier" sur les points à modifier en masse</div></div>`;
-    return;
-  }
-  scroll.innerHTML = pts.map(pt => `
-    <div class="list-item">
-      <div class="list-item-dot" style="background:${getMarkerColor(pt)}"></div>
-      <div class="list-item-info">
-        <div class="list-item-id">${pt.id}</div>
-        <div class="list-item-title">${pt.typeSupport || 'Point lumineux'}</div>
-        <div class="list-item-sub">${pt.technologie || '—'} · ${pt.puissance ? pt.puissance+'W' : '—'}</div>
-      </div>
-      <div onclick="retirerDuPanier('${pt.id}')" style="color:var(--red);font-size:18px;padding:4px 8px;cursor:pointer">×</div>
-    </div>
-  `).join('');
-}
-
-function retirerDuPanier(id) {
-  const pt = state.points.find(p => p.id === id);
-  if (pt) { pt.dansPanier = false; saveLocal(); renderPanier(); refreshMapMarkers(); }
-}
-
-function viderPanier() {
-  state.points.forEach(p => p.dansPanier = false);
-  saveLocal(); renderPanier(); refreshMapMarkers();
-  showToast('Panier vidé');
-}
-
-// ── MODAL MASSE ──
-const masseOptions = {
-  'f-etat-support': ['Bon','Moyen','Mauvais','À remplacer'],
-  'f-etat-luminaire': ['Bon','Moyen','Mauvais','À remplacer'],
-  'f-technologie': ['LED','Sodium HP','Sodium BP','Iodures métalliques','Fluo compact'],
-  'f-type-luminaire': ['Lanterne','Projecteur','Hublot','Borne','Applique','Globe'],
-};
-const masseKeys = {
-  'f-etat-support': 'etatSupport',
-  'f-etat-luminaire': 'etatLuminaire',
-  'f-technologie': 'technologie',
-  'f-type-luminaire': 'typeLuminaire',
-};
-
-document.getElementById('masse-field').addEventListener('change', function() {
-  const opts = masseOptions[this.value];
-  const row = document.getElementById('masse-value-row');
-  const sel = document.getElementById('masse-value');
-  if (opts) {
-    sel.innerHTML = opts.map(o => `<option>${o}</option>`).join('');
-    row.style.display = 'block';
-  } else { row.style.display = 'none'; }
+  req.onsuccess = () => resolve(req.result);
+  req.onerror = () => reject(req.error);
 });
 
-function openModalMasse() {
-  const pts = state.points.filter(p => p.dansPanier);
-  if (!pts.length) { showToast('Panier vide', 'error'); return; }
-  document.getElementById('modal-masse').classList.add('open');
-}
-function closeModalMasse(e) {
-  if (!e || e.target === document.getElementById('modal-masse'))
-    document.getElementById('modal-masse').classList.remove('open');
-}
-function applyMasse() {
-  const field = document.getElementById('masse-field').value;
-  const value = document.getElementById('masse-value').value;
-  const key = masseKeys[field];
-  if (!field || !key) { showToast('Sélectionnez un champ', 'error'); return; }
-  let count = 0;
-  state.points.filter(p => p.dansPanier).forEach(p => { p[key] = value; count++; });
-  saveLocal(); closeModalMasse(); renderPanier(); refreshMapMarkers();
-  showToast(count + ' point' + (count>1?'s':'') + ' modifié' + (count>1?'s':''), 'success');
-}
+const idbPut = async (obj) => {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(DB_STORE, "readwrite");
+    tx.objectStore(DB_STORE).put(obj);
+    tx.oncomplete = () => { db.close(); resolve(true); };
+    tx.onerror = () => { db.close(); reject(tx.error); };
+  });
+};
 
+const idbGetManyByPoint = async (pointId) => {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(DB_STORE, "readonly");
+    const idx = tx.objectStore(DB_STORE).index("pointId");
+    const req = idx.getAll(pointId);
+    req.onsuccess = () => { const r = req.result || []; db.close(); resolve(r); };
+    req.onerror = () => { db.close(); reject(req.error); };
+  });
+};
 
-// ── LASSO SELECTION ──
-let lassoActive = false;
-let lassoPath = [];
-let lassoLayer = null;
-let lassoSelected = [];
-let isDrawing = false;
+const idbDelete = async (id) => {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(DB_STORE, "readwrite");
+    tx.objectStore(DB_STORE).delete(id);
+    tx.oncomplete = () => { db.close(); resolve(true); };
+    tx.onerror = () => { db.close(); reject(tx.error); };
+  });
+};
 
-function toggleLasso() {
-  lassoActive = !lassoActive;
-  const btn = document.getElementById('lasso-btn');
-  const banner = document.getElementById('lasso-banner');
-  btn.classList.toggle('active', lassoActive);
-  banner.classList.toggle('show', lassoActive);
-  if (lassoActive) {
-    map.dragging.disable();
-    map.on('mousedown touchstart', startLasso);
-    showToast('Mode lasso actif — dessinez autour des points');
-  } else {
-    map.dragging.enable();
-    map.off('mousedown touchstart', startLasso);
-    map.off('mousemove touchmove', drawLasso);
-    map.off('mouseup touchend', endLasso);
-    if (lassoLayer) { map.removeLayer(lassoLayer); lassoLayer = null; }
-    lassoPath = [];
-    isDrawing = false;
+/* ===== Images: compression + resize ===== */
+const compressImageToDataUrl = (file, opts = {}) => new Promise((resolve, reject) => {
+  const { maxW = 1280, maxH = 1280, quality = 0.75, mime = "image/jpeg" } = opts;
+  const img = new Image();
+  const url = URL.createObjectURL(file);
+
+  img.onload = () => {
+    let w = img.width, h = img.height;
+    const ratio = Math.min(maxW / w, maxH / h, 1);
+    const nw = Math.max(1, Math.round(w * ratio));
+    const nh = Math.max(1, Math.round(h * ratio));
+
+    const canvas = document.createElement("canvas");
+    canvas.width = nw; canvas.height = nh;
+    const ctx = canvas.getContext("2d");
+    ctx.drawImage(img, 0, 0, nw, nh);
+    URL.revokeObjectURL(url);
+
+    try {
+      resolve(canvas.toDataURL(mime, quality));
+    } catch (e) { reject(e); }
+  };
+  img.onerror = (e) => { URL.revokeObjectURL(url); reject(e); };
+  img.src = url;
+});
+
+const waitForImages = (root) => {
+  const imgs = Array.from(root.querySelectorAll("img"));
+  return Promise.all(imgs.map(img => {
+    if (img.complete && img.naturalWidth > 0) return Promise.resolve();
+    return new Promise((res) => {
+      img.onload = () => res();
+      img.onerror = () => res();
+    });
+  }));
+};
+
+/* ===== Logo -> dataURL (fiable iPad PDF) ===== */
+let LOGO_DATAURL_CACHE = "";
+const getLogoDataUrl = async () => {
+  if (LOGO_DATAURL_CACHE) return LOGO_DATAURL_CACHE;
+  try {
+    const res = await fetch("logo.png", { cache: "no-store" });
+    const blob = await res.blob();
+    const dataUrl = await new Promise((resolve, reject) => {
+      const r = new FileReader();
+      r.onload = () => resolve(r.result);
+      r.onerror = reject;
+      r.readAsDataURL(blob);
+    });
+    LOGO_DATAURL_CACHE = dataUrl;
+    return dataUrl;
+  } catch {
+    return "logo.png";
   }
-}
+};
 
-function getEventLatLng(e) {
-  if (e.latlng) return e.latlng;
-  if (e.touches && e.touches[0]) {
-    const touch = e.touches[0];
-    return map.containerPointToLatLng(L.point(
-      touch.clientX - map.getContainer().getBoundingClientRect().left,
-      touch.clientY - map.getContainer().getBoundingClientRect().top
-    ));
+/* =========================
+   State
+========================= */
+const defaultPoint = () => ({
+  id: newId("pt"),
+  numero: "",
+  repere: "",
+  lat: "",
+  lon: "",
+  reserves_txt: "",
+  date_reprise: "",
+});
+
+const emptyState = () => ({
+  chantier: {
+    projet: "", commune: "", zone: "", date: todayISO(),
+    poseur: "", poseurAutre: "",
+    chef: "",
+    controleur: "", controleurAutre: "",
+    signatures: { controleur:"", entreprise:"", client:"" }
+  },
+  points: [ defaultPoint() ]
+});
+
+let state = emptyState();
+
+const ensureSignatures = () => {
+  state.chantier.signatures ||= { controleur:"", entreprise:"", client:"" };
+  state.chantier.signatures.controleur ||= "";
+  state.chantier.signatures.entreprise ||= "";
+  state.chantier.signatures.client ||= "";
+};
+
+/* =========================
+   Fiches (multi)
+========================= */
+const loadFichesIndex = () => {
+  try { return JSON.parse(localStorage.getItem(FICHES_INDEX_KEY) || "[]"); }
+  catch { return []; }
+};
+const saveFichesIndex = (arr) => localStorage.setItem(FICHES_INDEX_KEY, JSON.stringify(arr));
+const getCurrentFicheId = () => localStorage.getItem(CURRENT_FICHE_KEY) || "";
+const setCurrentFicheId = (id) => localStorage.setItem(CURRENT_FICHE_KEY, id);
+
+const ensureAtLeastOneFiche = () => {
+  let index = loadFichesIndex();
+
+  if (!index.length) {
+    const id = newId("fiche");
+    index = [{ id, name: makeFicheLabel(state), updatedAt: Date.now() }];
+    saveFichesIndex(index);
+    setCurrentFicheId(id);
+    localStorage.setItem(ficheStorageKey(id), JSON.stringify(state));
   }
-  return null;
-}
 
-function startLasso(e) {
-  if (!lassoActive) return;
-  isDrawing = true;
-  lassoPath = [];
-  const ll = getEventLatLng(e);
-  if (ll) lassoPath.push(ll);
-  if (lassoLayer) { map.removeLayer(lassoLayer); lassoLayer = null; }
-  map.on('mousemove touchmove', drawLasso);
-  map.on('mouseup touchend', endLasso);
-  L.DomEvent.preventDefault(e.originalEvent || e);
-}
+  if (!getCurrentFicheId()) setCurrentFicheId(index[0].id);
+};
 
-function drawLasso(e) {
-  if (!isDrawing) return;
-  const ll = getEventLatLng(e);
-  if (!ll) return;
-  lassoPath.push(ll);
-  if (lassoLayer) map.removeLayer(lassoLayer);
-  if (lassoPath.length > 1) {
-    lassoLayer = L.polygon(lassoPath, {
-      color: '#38bdf8', weight: 2,
-      fillColor: '#38bdf8', fillOpacity: 0.1,
-      dashArray: '6 4'
-    }).addTo(map);
+const refreshFicheSelect = () => {
+  const sel = byId("ficheSelect");
+  const index = loadFichesIndex().sort((a,b)=> (b.updatedAt||0)-(a.updatedAt||0));
+  const cur = getCurrentFicheId();
+
+  sel.innerHTML = index
+    .map(f => `<option value="${f.id}">${escapeHtml(f.name || "Fiche")}</option>`)
+    .join("");
+
+  sel.value = cur || (index[0]?.id || "");
+};
+
+const loadFiche = async (id) => {
+  const raw = localStorage.getItem(ficheStorageKey(id));
+  if (!raw) return false;
+  try {
+    const parsed = JSON.parse(raw);
+    if (parsed && parsed.chantier && Array.isArray(parsed.points)) {
+      state = parsed;
+      ensureSignatures();
+      setCurrentFicheId(id);
+      await render();
+      initSignatures(true);
+      return true;
+    }
+  } catch {}
+  return false;
+};
+
+const saveCurrentFiche = () => {
+  const id = getCurrentFicheId();
+  if (!id) return;
+
+  localStorage.setItem(ficheStorageKey(id), JSON.stringify(state));
+
+  const index = loadFichesIndex();
+  const name = makeFicheLabel(state);
+
+  const next = index.map(f => f.id === id ? { ...f, name, updatedAt: Date.now() } : f);
+  saveFichesIndex(next);
+  refreshFicheSelect();
+};
+
+/* ===== Save / Load fallback ===== */
+const saveState = () => {
+  try {
+    localStorage.setItem(LS_KEY_FALLBACK, JSON.stringify(state)); // fallback
+    saveCurrentFiche();
+    return true;
+  } catch (e) {
+    alert("⚠️ Impossible de sauvegarder. Détail : " + (e?.message || e));
+    return false;
   }
-}
+};
 
-function endLasso(e) {
-  if (!isDrawing) return;
-  isDrawing = false;
-  map.off('mousemove touchmove', drawLasso);
-  map.off('mouseup touchend', endLasso);
-  if (lassoPath.length < 3) { clearLassoPolygon(); return; }
+const loadState = () => {
+  // 1) fiche courante
+  const cur = getCurrentFicheId();
+  if (cur) {
+    const raw = localStorage.getItem(ficheStorageKey(cur));
+    if (raw) {
+      try {
+        const parsed = JSON.parse(raw);
+        if (parsed && parsed.chantier && Array.isArray(parsed.points)) {
+          state = parsed;
+          return;
+        }
+      } catch {}
+    }
+  }
 
-  // Fermer le polygone
-  lassoPath.push(lassoPath[0]);
+  // 2) fallback
+  const rawOld = localStorage.getItem(LS_KEY_FALLBACK);
+  if (rawOld) {
+    try {
+      const parsed = JSON.parse(rawOld);
+      if (parsed && parsed.chantier && Array.isArray(parsed.points)) state = parsed;
+    } catch {}
+  }
+};
 
-  // Trouver les points dans le lasso
-  lassoSelected = state.points.filter(pt => {
-    if (!pt.lat || !pt.lng) return false;
-    return isPointInPolygon([pt.lat, pt.lng], lassoPath);
+const duplicateFicheWithPhotos = async () => {
+  const index = loadFichesIndex();
+  const srcId = getCurrentFicheId();
+  if (!srcId) return;
+
+  const srcState = JSON.parse(JSON.stringify(state));
+  const newFicheId = newId("fiche");
+  const mapping = new Map();
+
+  const newPoints = (srcState.points || []).map(pt => {
+    const newPointId = newId("pt");
+    mapping.set(pt.id, newPointId);
+    return { ...pt, id: newPointId };
   });
 
-  if (!lassoSelected.length) {
-    showToast('Aucun point dans la sélection', 'error');
-    clearLassoPolygon();
-    return;
-  }
+  const newState = {
+    ...srcState,
+    chantier: { ...srcState.chantier },
+    points: newPoints
+  };
 
-  // Mettre les points dans le panier
-  lassoSelected.forEach(pt => { pt.dansPanier = true; });
-  saveLocal();
-  refreshMapMarkers();
-  document.getElementById('lasso-clear-btn').style.display = 'flex';
-
-  showToast(lassoSelected.length + ' point' + (lassoSelected.length > 1 ? 's' : '') + ' sélectionné' + (lassoSelected.length > 1 ? 's' : ''), 'success');
-
-  // Désactiver lasso et ouvrir modal masse directement
-  toggleLasso();
-  setTimeout(() => openModalMasseFromLasso(), 600);
-}
-
-function clearLassoPolygon() {
-  if (lassoLayer) { map.removeLayer(lassoLayer); lassoLayer = null; }
-  lassoPath = [];
-}
-
-function clearLassoSelection() {
-  lassoSelected.forEach(pt => { pt.dansPanier = false; });
-  lassoSelected = [];
-  saveLocal();
-  refreshMapMarkers();
-  clearLassoPolygon();
-  document.getElementById('lasso-clear-btn').style.display = 'none';
-  showToast('Sélection effacée');
-}
-
-// Ray casting algorithm — point dans polygone
-function isPointInPolygon(point, polygon) {
-  const [py, px] = point;
-  let inside = false;
-  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
-    const xi = polygon[i].lat, yi = polygon[i].lng;
-    const xj = polygon[j].lat, yj = polygon[j].lng;
-    if (((yi > px) !== (yj > px)) && (py < (xj - xi) * (px - yi) / (yj - yi) + xi)) {
-      inside = !inside;
+  // dupliquer photos
+  for (const [oldPid, newPid] of mapping.entries()) {
+    const oldPhotos = await idbGetManyByPoint(oldPid);
+    for (const ph of oldPhotos) {
+      await idbPut({
+        id: newId("ph"),
+        pointId: newPid,
+        dataUrl: ph.dataUrl,
+        createdAt: Date.now()
+      });
     }
   }
-  return inside;
-}
 
-function openModalMasseFromLasso() {
-  const count = lassoSelected.length;
-  document.getElementById('masse-count').textContent = count;
-  document.getElementById('modal-masse').classList.add('open');
-}
+  localStorage.setItem(ficheStorageKey(newFicheId), JSON.stringify(newState));
 
-updateOfflineBanner();
+  const name = makeFicheLabel(newState) + " (copie)";
+  const nextIndex = [...index, { id: newFicheId, name, updatedAt: Date.now() }];
+  saveFichesIndex(nextIndex);
 
-// ── GOOGLE APPS SCRIPT CONFIG ──
-const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzI5xYwtoeIR7R4eEmCgBUxNP8DF1dE3yNhBlHloQBWaTgg-WHVgsZqanoAzOqPuc25/exec';
+  setCurrentFicheId(newFicheId);
+  state = newState;
+  ensureSignatures();
+  await render();
+  initSignatures(true);
+  refreshFicheSelect();
+};
 
-let syncQueue = [];
-let isSyncing = false;
+/* =========================
+   Render
+========================= */
+const renderPoint = (p, idx, photos) => {
+  const numeroStyle = String(p.numero || "").trim() ? "" : "border:2px solid #ef4444;";
 
-// ── LIRE les données depuis Apps Script ──
-async function loadFromSheets() {
-  if (!navigator.onLine) { loadLocal(); return; }
-  try {
-    showToast('Chargement des données...');
-    const url = SCRIPT_URL + '?sheet=Points%20Lumineux&chantier=' + encodeURIComponent(state.chantier);
-    const res = await fetch(url);
-    const data = await res.json();
-    if (data.error) throw new Error(data.error);
-    if (!data.rows || !data.rows.length) {
-      showToast('Aucun point sur ce chantier', '');
-      loadLocal();
+  return `
+    <section class="card" data-point-id="${p.id}">
+      <div class="point-head">
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+          <strong>Point ${idx+1}</strong>
+          <span class="pill bad">Non conforme</span>
+          <span class="small">ID: ${p.id.slice(0,8)}</span>
+        </div>
+        <div class="btnrow">
+          <button class="btn secondary" type="button" data-action="gps">📍 GPS</button>
+          <button class="btn danger" type="button" data-action="remove">🗑️ Supprimer</button>
+        </div>
+      </div>
+
+      <div class="row" style="margin-top:12px;">
+        <div>
+          <label>Nb point lumineux (obligatoire)</label>
+          <input style="${numeroStyle}" value="${escapeHtml(p.numero)}" data-k="numero" placeholder="Ex: PL-12 / A22" />
+        </div>
+        <div>
+          <label>Adresse / repère</label>
+          <input value="${escapeHtml(p.repere)}" data-k="repere" placeholder="Ex: devant maison 24" />
+        </div>
+        <div>
+          <label>Latitude</label>
+          <input value="${escapeHtml(p.lat)}" data-k="lat" placeholder="Auto via bouton GPS" />
+        </div>
+        <div>
+          <label>Longitude</label>
+          <input value="${escapeHtml(p.lon)}" data-k="lon" placeholder="Auto via bouton GPS" />
+        </div>
+      </div>
+
+      <div class="row" style="margin-top:12px;">
+        <div>
+          <label>Date de reprise</label>
+          <input type="date" value="${escapeHtml(p.date_reprise || "")}" data-k="date_reprise" />
+        </div>
+        <div></div>
+      </div>
+
+      <h4 style="margin:14px 0 8px 0;">Commentaire / non-conformité</h4>
+      <textarea data-k="reserves_txt" placeholder="Observations, anomalies…">${escapeHtml(p.reserves_txt)}</textarea>
+
+      <h4 style="margin:14px 0 8px 0;">Photos</h4>
+      <input type="file" accept="image/*" multiple data-action="addPhotos" />
+      <div class="small">Photos stockées localement (IndexedDB) + compressées</div>
+
+      <div class="photos">
+        ${(photos || []).map((ph, i) => `
+          <div class="thumb">
+            <img src="${ph.dataUrl}" alt="photo" />
+            <div>
+              Photo ${i+1}
+              <button class="btn danger" type="button"
+                style="margin-top:6px;padding:6px 8px;font-size:12px;"
+                data-action="rmPhoto" data-photo-id="${ph.id}">Suppr.</button>
+            </div>
+          </div>
+        `).join("")}
+      </div>
+    </section>
+  `;
+};
+
+const render = async () => {
+  byId("projet").value = state.chantier.projet || "";
+  byId("commune").value = state.chantier.commune || "";
+  byId("zone").value = state.chantier.zone || "";
+  byId("date").value = state.chantier.date || todayISO();
+
+  byId("poseur").value = state.chantier.poseur || "";
+  byId("poseurAutre").value = state.chantier.poseurAutre || "";
+  byId("poseurAutreWrap").style.display =
+    (state.chantier.poseur === "__autre__") ? "block" : "none";
+
+  byId("chef").value = state.chantier.chef || "";
+
+  byId("controleur").value = state.chantier.controleur || "";
+  byId("controleurAutre").value = state.chantier.controleurAutre || "";
+  byId("controleurAutreWrap").style.display =
+    (state.chantier.controleur === "__autre__") ? "block" : "none";
+
+  // charge photos par point
+  const chunks = [];
+  for (let i=0; i<state.points.length; i++){
+    const p = state.points[i];
+    const photos = await idbGetManyByPoint(p.id);
+    chunks.push(renderPoint(p, i, photos));
+  }
+  byId("pointsWrap").innerHTML = chunks.join("");
+
+  byId("syntheseText").innerHTML = `
+    <div>Points non conformes : <strong>${state.points.length}</strong></div>
+  `;
+};
+
+/* =========================
+   Bind chantier
+========================= */
+const bindChantier = () => {
+  const map = [
+    ["projet","projet"], ["commune","commune"], ["zone","zone"], ["date","date"],
+    ["poseur","poseur"], ["chef","chef"],
+    ["controleur","controleur"],
+  ];
+
+  map.forEach(([id, key]) => {
+    const el = byId(id);
+    if (!el) return;
+
+    const apply = async () => {
+      state.chantier[key] = el.value;
+      saveState();
+      await render();
+    };
+
+    el.addEventListener("input", apply);
+    el.addEventListener("change", apply);
+  });
+
+  // Controleur - autre
+  const ctrlSelect = byId("controleur");
+  const ctrlOtherWrap = byId("controleurAutreWrap");
+  const ctrlOtherInput = byId("controleurAutre");
+
+  ctrlSelect.addEventListener("change", async () => {
+    const isOther = ctrlSelect.value === "__autre__";
+    ctrlOtherWrap.style.display = isOther ? "block" : "none";
+    if (!isOther) {
+      state.chantier.controleurAutre = "";
+      ctrlOtherInput.value = "";
+      saveState();
+      await render();
+    }
+  });
+
+  ctrlOtherInput.addEventListener("input", () => {
+    state.chantier.controleurAutre = ctrlOtherInput.value;
+    saveState();
+  });
+
+  // Poseur - autre
+  const poseurSelect = byId("poseur");
+  const poseurOtherWrap = byId("poseurAutreWrap");
+  const poseurOtherInput = byId("poseurAutre");
+
+  poseurSelect.addEventListener("change", async () => {
+    const isOther = poseurSelect.value === "__autre__";
+    poseurOtherWrap.style.display = isOther ? "block" : "none";
+    if (!isOther) {
+      state.chantier.poseurAutre = "";
+      poseurOtherInput.value = "";
+      saveState();
+      await render();
+    }
+  });
+
+  poseurOtherInput.addEventListener("input", () => {
+    state.chantier.poseurAutre = poseurOtherInput.value;
+    saveState();
+  });
+};
+
+/* =========================
+   Points events
+========================= */
+const handlePointsEvents = () => {
+  const wrap = byId("pointsWrap");
+
+  wrap.addEventListener("input", (e) => {
+    const card = e.target.closest("[data-point-id]");
+    if (!card) return;
+
+    const pid = card.getAttribute("data-point-id");
+    const p = state.points.find(x => x.id === pid);
+    if (!p) return;
+
+    const k = e.target.getAttribute("data-k");
+    if (!k) return;
+
+    p[k] = e.target.value;
+    saveState();
+  });
+
+  wrap.addEventListener("change", async (e) => {
+    const card = e.target.closest("[data-point-id]");
+    if (!card) return;
+
+    const pid = card.getAttribute("data-point-id");
+    const p = state.points.find(x => x.id === pid);
+    if (!p) return;
+
+    if (e.target.getAttribute("data-action") === "addPhotos") {
+      const files = Array.from(e.target.files || []);
+      if (!files.length) return;
+
+      const MAX_PHOTOS_PER_POINT = 12;
+      const existing = await idbGetManyByPoint(pid);
+
+      if (existing.length >= MAX_PHOTOS_PER_POINT) {
+        alert("Limite atteinte : " + MAX_PHOTOS_PER_POINT + " photos max pour ce point.");
+        e.target.value = "";
+        return;
+      }
+
+      let remaining = MAX_PHOTOS_PER_POINT - existing.length;
+
+      for (const f of files) {
+        if (remaining <= 0) break;
+        try {
+          const dataUrl = await compressImageToDataUrl(f, { maxW: 1280, maxH: 1280, quality: 0.75 });
+          await idbPut({ id: newId("ph"), pointId: pid, dataUrl, createdAt: Date.now() });
+          remaining--;
+        } catch (err) {
+          alert("Impossible d'ajouter une photo : " + (err?.message || err));
+        }
+      }
+
+      e.target.value = ""; // important iOS
+      await render();
+      saveState();
+    }
+  });
+
+  wrap.addEventListener("click", async (e) => {
+    const btn = e.target.closest("button");
+    if (!btn) return;
+
+    const card = btn.closest("[data-point-id]");
+    if (!card) return;
+
+    const pid = card.getAttribute("data-point-id");
+    const action = btn.getAttribute("data-action");
+
+    if (action === "gps") {
+      const p = state.points.find(x => x.id === pid);
+      if (!p) return;
+
+      if (!navigator.geolocation) {
+        alert("Géolocalisation non disponible sur ce navigateur.");
+        return;
+      }
+
+      navigator.geolocation.getCurrentPosition(
+        async (pos) => {
+          p.lat = String(pos.coords.latitude);
+          p.lon = String(pos.coords.longitude);
+          saveState();
+          await render();
+        },
+        (err) => alert("GPS refusé ou indisponible : " + err.message),
+        { enableHighAccuracy: true, timeout: 10000 }
+      );
       return;
     }
-    state.points = data.rows.map(r => ({
-      id: String(r['ID'] || ''),
-      nbrSupports: r['Nbr supports'] || '',
-      typeSupport: r['Types de support'] || '',
-      etatSupport: r['État du support'] || '',
-      hauteur: r['Hauteur'] || '',
-      typeAttache: r["Types d'attache"] || '',
-      nbrLuminaires: r['Nbr Luminaires'] || '',
-      typeLuminaire: r['Types de luminaire'] || '',
-      etatLuminaire: r['État luminaires'] || '',
-      technologie: r['Technologie'] || '',
-      puissance: r['Puissance'] || '',
-      lng: parseFloat(r['Longitude']) || null,
-      lat: parseFloat(r['Latitude']) || null,
-      dansPanier: r['Dans le Panier'] === 'TRUE' || r['Dans le Panier'] === true,
-      chantier: r['Chantier'] || '',
-      technicien: r['Technicien'] || '',
-      date: r['Date'] || '',
-      photos: {}
-    }));
-    saveLocal();
-    refreshMapMarkers();
-    showToast(state.points.length + ' points chargés ✓', 'success');
-  } catch(e) {
-    console.error('Load error:', e);
-    loadLocal();
-    showToast('Mode hors-ligne', '');
-  }
-}
 
-// ── ÉCRIRE un point via Apps Script ──
-async function syncPointToSheets(pt) {
-  if (!navigator.onLine) {
-    syncQueue.push(pt);
-    showToast('Sauvegardé localement', '');
-    return;
-  }
-  try {
-    const coordsGPS = pt.lat && pt.lng ? pt.lat.toFixed(6) + ', ' + pt.lng.toFixed(6) : '';
-    const payload = {
-      action: 'upsert',
-      sheet: 'Points Lumineux',
-      id: pt.id,
-      data: {
-        'ID': pt.id,
-        'Nbr supports': pt.nbrSupports,
-        'Types de support': pt.typeSupport,
-        'État du support': pt.etatSupport,
-        'Hauteur': pt.hauteur,
-        "Types d'attache": pt.typeAttache,
-        'Nbr Luminaires': pt.nbrLuminaires,
-        'Types de luminaire': pt.typeLuminaire,
-        'État luminaires': pt.etatLuminaire,
-        'Technologie': pt.technologie,
-        'Puissance': pt.puissance,
-        'Longitude': pt.lng || '',
-        'Latitude': pt.lat || '',
-        'Coordonnees_GPS': coordsGPS,
-        'Dans le Panier': pt.dansPanier ? 'TRUE' : 'FALSE',
-        'Chantier': pt.chantier,
-        'Technicien': pt.technicien,
-        'Date': pt.date
+    if (action === "remove") {
+      if (state.points.length === 1) {
+        alert("Il faut au moins 1 point dans la fiche.");
+        return;
       }
+
+      const photos = await idbGetManyByPoint(pid);
+      for (const ph of photos) await idbDelete(ph.id);
+
+      state.points = state.points.filter(x => x.id !== pid);
+      saveState();
+      await render();
+      return;
+    }
+
+    if (action === "rmPhoto") {
+      const photoId = btn.getAttribute("data-photo-id");
+      if (!photoId) return;
+      await idbDelete(photoId);
+      await render();
+      saveState();
+      return;
+    }
+  });
+};
+
+/* =========================
+   Signatures
+========================= */
+let sigCleanup = []; // pour éviter accumulation listeners
+
+const setupSignaturePad = (canvasId, clearBtnId, key) => {
+  const canvas = byId(canvasId);
+  const clearBtn = byId(clearBtnId);
+  const ctx = canvas.getContext("2d");
+  ctx.lineWidth = 2;
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+
+  // restore image
+  const existing = state.chantier.signatures?.[key];
+  if (existing) {
+    const img = new Image();
+    img.onload = () => {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
     };
-    const res = await fetch(SCRIPT_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'text/plain' },
-      body: JSON.stringify(payload)
+    img.src = existing;
+  } else {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+  }
+
+  let drawing = false;
+
+  const getPos = (ev) => {
+    const rect = canvas.getBoundingClientRect();
+    const clientX = ev.touches ? ev.touches[0].clientX : ev.clientX;
+    const clientY = ev.touches ? ev.touches[0].clientY : ev.clientY;
+    return {
+      x: (clientX - rect.left) * (canvas.width / rect.width),
+      y: (clientY - rect.top) * (canvas.height / rect.height)
+    };
+  };
+
+  const start = (ev) => {
+    ev.preventDefault();
+    drawing = true;
+    const p = getPos(ev);
+    ctx.beginPath();
+    ctx.moveTo(p.x, p.y);
+  };
+
+  const move = (ev) => {
+    if (!drawing) return;
+    ev.preventDefault();
+    const p = getPos(ev);
+    ctx.lineTo(p.x, p.y);
+    ctx.stroke();
+  };
+
+  const end = (ev) => {
+    if (!drawing) return;
+    ev.preventDefault();
+    drawing = false;
+    state.chantier.signatures[key] = canvas.toDataURL("image/png");
+    saveState();
+  };
+
+  const onMouseUp = (ev) => end(ev);
+
+  canvas.addEventListener("mousedown", start);
+  canvas.addEventListener("mousemove", move);
+  window.addEventListener("mouseup", onMouseUp);
+
+  canvas.addEventListener("touchstart", start, { passive:false });
+  canvas.addEventListener("touchmove", move, { passive:false });
+  canvas.addEventListener("touchend", end, { passive:false });
+
+  clearBtn.addEventListener("click", () => {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    state.chantier.signatures[key] = "";
+    saveState();
+  });
+
+  // cleanup handlers
+  sigCleanup.push(() => {
+    canvas.removeEventListener("mousedown", start);
+    canvas.removeEventListener("mousemove", move);
+    window.removeEventListener("mouseup", onMouseUp);
+    canvas.removeEventListener("touchstart", start);
+    canvas.removeEventListener("touchmove", move);
+    canvas.removeEventListener("touchend", end);
+  });
+};
+
+const initSignatures = (force=false) => {
+  ensureSignatures();
+  if (force) {
+    sigCleanup.forEach(fn => { try { fn(); } catch {} });
+    sigCleanup = [];
+  }
+  setupSignaturePad("sigControleur", "clearSigControleur", "controleur");
+  setupSignaturePad("sigEntreprise", "clearSigEntreprise", "entreprise");
+  setupSignaturePad("sigClient", "clearSigClient", "client");
+};
+
+/* =========================
+   PDF
+========================= */
+const buildPdfBody = async () => {
+  const sigs = state.chantier.signatures || {};
+
+  const controleurNom =
+    state.chantier.controleur === "__autre__"
+      ? (state.chantier.controleurAutre || "")
+      : (state.chantier.controleur || "");
+
+  const poseurNom =
+    state.chantier.poseur === "__autre__"
+      ? (state.chantier.poseurAutre || "")
+      : (state.chantier.poseur || "");
+
+  const logoSrc = await getLogoDataUrl();
+
+  const rows = [];
+  for (let i = 0; i < state.points.length; i++) {
+    const p = state.points[i];
+    const photos = await idbGetManyByPoint(p.id);
+    const first3 = photos.slice(0, 3);
+
+    rows.push(`
+      <tr style="page-break-inside:avoid;">
+        <td style="border:1px solid #ddd;padding:8px;vertical-align:top;">${i + 1}</td>
+        <td style="border:1px solid #ddd;padding:8px;vertical-align:top;"><strong>${escapeHtml(p.numero)}</strong></td>
+        <td style="border:1px solid #ddd;padding:8px;vertical-align:top;background:#fee2e2;color:#991b1b;font-weight:700;">
+          ${escapeHtml(p.reserves_txt || "—")}
+        </td>
+        <td style="border:1px solid #ddd;padding:8px;vertical-align:top;">
+          <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            ${first3.map(ph => `
+              <img src="${ph.dataUrl}" alt="Photo"
+                style="height:85px;width:auto;object-fit:cover;border:1px solid #ddd;border-radius:6px;">
+            `).join("")}
+            ${(photos.length > 3) ? `<div style="font-size:11px;color:#555;align-self:center;">+${photos.length - 3}</div>` : ""}
+          </div>
+        </td>
+        <td style="border:1px solid #ddd;padding:8px;vertical-align:top;">
+          ${escapeHtml(p.repere || "")}<br>
+          <span style="font-size:11px;color:#555;">
+            ${escapeHtml(p.lat || "")} ${(p.lat && p.lon) ? " • " : ""} ${escapeHtml(p.lon || "")}
+          </span>
+        </td>
+        <td style="border:1px solid #ddd;padding:8px;vertical-align:top;white-space:nowrap;">${escapeHtml(p.date_reprise || "")}</td>
+      </tr>
+    `);
+  }
+
+  const signatureBox = (imgDataUrl) => {
+    if (imgDataUrl) {
+      return `<img src="${imgDataUrl}" style="width:100%;max-height:140px;object-fit:contain;border:1px solid #ddd;border-radius:8px;">`;
+    }
+    return `
+      <div style="width:100%;height:120px;border:2px solid #111;border-radius:8px;"></div>
+      <div style="font-size:11px;color:#555;margin-top:6px;text-align:center;">Nom / Date / Signature</div>
+    `;
+  };
+
+  return `
+    <div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;line-height:1.35;">
+      <div style="display:flex;gap:14px;align-items:center;border-bottom:2px solid #111827;padding-bottom:10px;margin-bottom:16px;">
+        <img src="${logoSrc}" alt="Logo" style="height:80px;width:auto;object-fit:contain;">
+        <div>
+          <div style="font-size:18px;font-weight:700;margin:0;">PV – Points non conformes (Réserves)</div>
+          <div style="font-size:12px;color:#555;margin-top:4px;">
+            Commune : <strong>${escapeHtml(state.chantier.commune)}</strong> |
+            Date : <strong>${escapeHtml(state.chantier.date)}</strong><br>
+            Projet : <strong>${escapeHtml(state.chantier.projet)}</strong><br>
+            Poseur : <strong>${escapeHtml(poseurNom)}</strong> |
+            Contrôleur : <strong>${escapeHtml(controleurNom)}</strong>
+          </div>
+        </div>
+      </div>
+
+      <table style="width:100%;border-collapse:collapse;font-size:12px;">
+        <thead>
+          <tr>
+            <th style="border:1px solid #ddd;padding:8px;background:#f3f4f6;text-align:left;width:4%;">#</th>
+            <th style="border:1px solid #ddd;padding:8px;background:#f3f4f6;text-align:left;width:10%;">Nb point</th>
+            <th style="border:1px solid #ddd;padding:8px;background:#f3f4f6;text-align:left;width:40%;">Non-conformité / Observation</th>
+            <th style="border:1px solid #ddd;padding:8px;background:#f3f4f6;text-align:left;width:16%;">Photos</th>
+            <th style="border:1px solid #ddd;padding:8px;background:#f3f4f6;text-align:left;width:18%;">Localisation</th>
+            <th style="border:1px solid #ddd;padding:8px;background:#f3f4f6;text-align:left;width:12%;">Date de reprise</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${rows.join("")}
+        </tbody>
+      </table>
+
+      <h2 style="margin-top:16px;">Signatures</h2>
+      <table style="width:100%;border-collapse:collapse;">
+        <tr>
+          <td style="width:33%;padding:8px;border:1px solid #ddd;">
+            <strong>Contrôleur</strong><br>
+            ${signatureBox(sigs.controleur)}
+          </td>
+          <td style="width:33%;padding:8px;border:1px solid #ddd;">
+            <strong>Entreprise</strong><br>
+            ${signatureBox(sigs.entreprise)}
+          </td>
+          <td style="width:33%;padding:8px;border:1px solid #ddd;">
+            <strong>Client</strong><br>
+            ${signatureBox(sigs.client)}
+          </td>
+        </tr>
+      </table>
+    </div>
+  `;
+};
+
+const exportPDF = async () => {
+  let container = null;
+  let previewWin = null;
+
+  try {
+    // ouvrir tout de suite (sinon pop-up bloquée sur iPad)
+    previewWin = window.open("", "_blank");
+    if (!previewWin) {
+      alert("Pop-up bloquée. Autorise les pop-ups (Safari).");
+      return;
+    }
+    previewWin.document.write("<p style='font-family:system-ui'>Génération du PDF…</p>");
+
+    // validation minimum
+    const missing = state.points
+      .map((p, i) => (!String(p.numero || "").trim() ? `Point ${i+1}` : null))
+      .filter(Boolean);
+    if (missing.length) {
+      alert("Numéro obligatoire manquant pour : " + missing.join(", "));
+      previewWin.close();
+      return;
+    }
+
+    byId("pdfLoading").style.display = "flex";
+
+    // container rendu
+    container = document.createElement("div");
+    container.style.position = "fixed";
+    container.style.left = "0";
+    container.style.top = "0";
+    container.style.width = "794px"; // A4 @96dpi env.
+    container.style.background = "#fff";
+    container.style.visibility = "hidden"; // iPad: invisible mais rendu OK
+    container.style.pointerEvents = "none";
+    container.style.zIndex = "9999";
+
+    container.innerHTML = await buildPdfBody();
+    document.body.appendChild(container);
+
+    // attendre paint + fonts + images
+    await new Promise(r => requestAnimationFrame(r));
+    await new Promise(r => requestAnimationFrame(r));
+    if (document.fonts && document.fonts.ready) {
+      try { await document.fonts.ready; } catch(e) {}
+    }
+    await waitForImages(container);
+    await new Promise(r => setTimeout(r, 150));
+
+    const canvas = await html2canvas(container, {
+      scale: 1.6,
+      useCORS: true,
+      allowTaint: false,
+      backgroundColor: "#ffffff",
+      logging: false,
+      imageTimeout: 20000
     });
-    const result = await res.json();
-    if (result.error) throw new Error(result.error);
-    showToast('Synchronisé dans Sheets ✓', 'success');
-  } catch(e) {
-    console.error('Sync error:', e);
-    syncQueue.push(pt);
-    showToast('Sauvegardé local — sync au retour réseau', '');
-  }
-}
 
-// ── VIDER la file d'attente hors-ligne ──
-async function flushSyncQueue() {
-  if (isSyncing || !syncQueue.length || !navigator.onLine) return;
-  isSyncing = true;
-  showToast('Synchronisation ' + syncQueue.length + ' points...');
-  while (syncQueue.length) {
-    const pt = syncQueue.shift();
-    await syncPointToSheets(pt);
-  }
-  isSyncing = false;
-  showToast('Tout synchronisé ✓', 'success');
-}
-window.addEventListener('online', flushSyncQueue);
+    const { jsPDF } = window.jspdf;
+    const pdf = new jsPDF({ unit: "mm", format: "a4", orientation: "portrait" });
 
+    const pdfW = pdf.internal.pageSize.getWidth();
+    const pdfH = pdf.internal.pageSize.getHeight();
+    const M = 8;
+    const usableW = pdfW - 2 * M;
+    const usableH = pdfH - 2 * M;
+
+    const imgW = usableW;
+    const imgH = canvas.height * (imgW / canvas.width);
+
+    if (imgH <= usableH) {
+      const imgData = canvas.toDataURL("image/jpeg", 0.95);
+      pdf.addImage(imgData, "JPEG", M, M, imgW, imgH);
+    } else {
+      const pageCanvas = document.createElement("canvas");
+      const pageCtx = pageCanvas.getContext("2d");
+
+      const pageHpx = Math.floor(canvas.width * (usableH / usableW));
+      let y = 0;
+      let first = true;
+
+      while (y < canvas.height) {
+        const sliceH = Math.min(pageHpx, canvas.height - y);
+
+        pageCanvas.width = canvas.width;
+        pageCanvas.height = sliceH;
+
+        pageCtx.clearRect(0, 0, pageCanvas.width, pageCanvas.height);
+        pageCtx.drawImage(canvas, 0, y, canvas.width, sliceH, 0, 0, pageCanvas.width, sliceH);
+
+        const pageImg = pageCanvas.toDataURL("image/jpeg", 0.95);
+        const pageImgH_mm = (sliceH * imgW) / canvas.width;
+
+        if (!first) pdf.addPage();
+        first = false;
+
+        pdf.addImage(pageImg, "JPEG", M, M, imgW, pageImgH_mm);
+        y += sliceH;
+      }
+    }
+
+    byId("pdfLoading").style.display = "none";
+
+    const blob = pdf.output("blob");
+    const url = URL.createObjectURL(blob);
+    previewWin.location.href = url;
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+
+  } catch (e) {
+    byId("pdfLoading").style.display = "none";
+    alert("Erreur PDF : " + (e?.message || e));
+    if (previewWin && !previewWin.closed) previewWin.close();
+  } finally {
+    if (container) container.remove();
+  }
+};
+
+/* =========================
+   Buttons
+========================= */
+const bindButtons = () => {
+  byId("addPointBtn").addEventListener("click", async () => {
+    state.points.push(defaultPoint());
+    saveState();
+    await render();
+    window.scrollTo({ top: document.body.scrollHeight, behavior: "smooth" });
+  });
+
+  byId("pdfBtn").addEventListener("click", exportPDF);
+
+  // vider la fiche courante (sans toucher les autres fiches)
+  byId("resetBtn").addEventListener("click", async () => {
+    if (!confirm("Vider la fiche courante ? (points + photos + signatures)")) return;
+
+    // supprimer photos des points
+    for (const pt of (state.points || [])) {
+      const photos = await idbGetManyByPoint(pt.id);
+      for (const ph of photos) await idbDelete(ph.id);
+    }
+
+    // reset state
+    state = emptyState();
+
+    saveState();
+    await render();
+    initSignatures(true);
+  });
+};
+
+/* =========================
+   UI Fiches
+========================= */
+const bindFichesUI = () => {
+  const sel = byId("ficheSelect");
+
+  sel.addEventListener("change", async () => {
+    const id = sel.value;
+    if (!id) return;
+    await loadFiche(id);
+    refreshFicheSelect();
+  });
+
+  byId("saveFicheBtn").addEventListener("click", async () => {
+    saveState();
+    refreshFicheSelect();
+    alert("✅ Fiche sauvegardée");
+  });
+
+  byId("newFicheBtn").addEventListener("click", async () => {
+    const id = newId("fiche");
+    state = emptyState();
+    localStorage.setItem(ficheStorageKey(id), JSON.stringify(state));
+
+    const index = loadFichesIndex();
+    index.push({ id, name: "Nouvelle fiche", updatedAt: Date.now() });
+    saveFichesIndex(index);
+
+    setCurrentFicheId(id);
+    ensureSignatures();
+    await render();
+    initSignatures(true);
+    refreshFicheSelect();
+  });
+
+  byId("dupFicheBtn").addEventListener("click", async () => {
+    await duplicateFicheWithPhotos();
+    alert("✅ Fiche dupliquée (photos incluses)");
+  });
+
+  byId("delFicheBtn").addEventListener("click", async () => {
+    const id = getCurrentFicheId();
+    if (!id) return;
+
+    if (!confirm("Supprimer cette fiche ? (photos incluses)")) return;
+
+    // supprimer photos de cette fiche
+    try {
+      const raw = localStorage.getItem(ficheStorageKey(id));
+      if (raw) {
+        const st = JSON.parse(raw);
+        for (const pt of (st?.points || [])) {
+          const photos = await idbGetManyByPoint(pt.id);
+          for (const ph of photos) await idbDelete(ph.id);
+        }
+      }
+    } catch {}
+
+    localStorage.removeItem(ficheStorageKey(id));
+    let index = loadFichesIndex().filter(f => f.id !== id);
+    saveFichesIndex(index);
+
+    if (!index.length) {
+      state = emptyState();
+      ensureAtLeastOneFiche();
+    } else {
+      setCurrentFicheId(index[0].id);
+      await loadFiche(index[0].id);
+    }
+
+    refreshFicheSelect();
+    alert("🗑️ Fiche supprimée");
+  });
+};
+
+/* =========================
+   Init
+========================= */
+(async () => {
+  loadState();
+  ensureAtLeastOneFiche();
+  ensureSignatures();
+
+  bindChantier();
+  handlePointsEvents();
+  bindButtons();
+  bindFichesUI();
+
+  refreshFicheSelect();
+  await render();
+  saveState();
+  initSignatures(true);
+})();
 </script>
 </body>
 </html>
