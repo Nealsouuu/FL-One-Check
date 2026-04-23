@@ -156,6 +156,11 @@
           <button class="btn" id="saveFicheBtn" type="button">💾 Sauver</button>
           <button class="btn secondary" id="dupFicheBtn" type="button">📄 Dupliquer</button>
           <button class="btn danger" id="delFicheBtn" type="button">🗑️ Supprimer</button>
+
+          <!-- ✅ NOUVEAU : Export / Import JSON (avec photos + signatures) -->
+          <button class="btn secondary" id="exportJsonBtn" type="button">⬇️ Export JSON</button>
+          <button class="btn secondary" id="importJsonBtn" type="button">⬆️ Import JSON</button>
+          <input id="importJsonInput" type="file" accept="application/json" style="display:none;" />
         </div>
       </div>
     </div>
@@ -163,6 +168,7 @@
     <div class="btnrow" style="margin-top:12px;">
       <button class="btn" id="addPointBtn" type="button">➕ Ajouter un point non conforme</button>
       <button class="btn secondary" id="pdfBtn" type="button">🧾 Exporter PDF</button>
+      <button class="btn" id="sharePdfBtn" type="button" style="background:#2563eb;">📤 Partager (Mail/WhatsApp)</button>
       <button class="btn danger" id="resetBtn" type="button">🧽 Vider la fiche (courante)</button>
     </div>
   </section>
@@ -412,8 +418,28 @@ const saveFichesIndex = (arr) => localStorage.setItem(FICHES_INDEX_KEY, JSON.str
 const getCurrentFicheId = () => localStorage.getItem(CURRENT_FICHE_KEY) || "";
 const setCurrentFicheId = (id) => localStorage.setItem(CURRENT_FICHE_KEY, id);
 
+/* ✅ NEW: rebuild index si vide (robustesse) */
+const rebuildIndexFromLocalStorage = () => {
+  const keys = Object.keys(localStorage);
+  const ids = keys
+    .filter(k => k.startsWith("FL_FICHE_"))
+    .map(k => k.replace("FL_FICHE_", ""));
+
+  const index = [];
+  for (const id of ids) {
+    try {
+      const st = JSON.parse(localStorage.getItem(ficheStorageKey(id)) || "null");
+      if (!st?.chantier || !Array.isArray(st?.points)) continue;
+      index.push({ id, name: makeFicheLabel(st), updatedAt: Date.now() });
+    } catch {}
+  }
+  if (index.length) saveFichesIndex(index);
+  return index;
+};
+
 const ensureAtLeastOneFiche = () => {
   let index = loadFichesIndex();
+  if (!index.length) index = rebuildIndexFromLocalStorage();
 
   if (!index.length) {
     const id = newId("fiche");
@@ -555,6 +581,83 @@ const duplicateFicheWithPhotos = async () => {
   refreshFicheSelect();
 };
 
+/* ✅ NEW: Export / Import JSON (state + photos + signatures) */
+const exportCurrentFicheToJson = async () => {
+  const ficheId = getCurrentFicheId();
+  if (!ficheId) return;
+
+  const photos = [];
+  for (const pt of state.points || []) {
+    const phs = await idbGetManyByPoint(pt.id);
+    for (const ph of phs) photos.push(ph);
+  }
+
+  const payload = {
+    meta: { exportedAt: new Date().toISOString(), version: 1 },
+    state,
+    photos
+  };
+
+  const blob = new Blob([JSON.stringify(payload)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `fiche_${makeFicheLabel(state).replaceAll(" ", "_").slice(0,60)}.json`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+
+  setTimeout(() => URL.revokeObjectURL(url), 30000);
+};
+
+const importFicheFromJsonFile = async (file) => {
+  const text = await file.text();
+  const payload = JSON.parse(text);
+
+  if (!payload?.state?.chantier || !Array.isArray(payload?.state?.points)) {
+    alert("Fichier JSON invalide.");
+    return;
+  }
+
+  const newFicheId = newId("fiche");
+  const importedState = payload.state;
+
+  // éviter collisions d’IDs -> remapper points/photos
+  const mapping = new Map();
+  importedState.points = (importedState.points || []).map(pt => {
+    const newPid = newId("pt");
+    mapping.set(pt.id, newPid);
+    return { ...pt, id: newPid };
+  });
+
+  const importedPhotos = Array.isArray(payload.photos) ? payload.photos : [];
+  for (const ph of importedPhotos) {
+    const newPointId = mapping.get(ph.pointId);
+    if (!newPointId) continue;
+    await idbPut({
+      id: newId("ph"),
+      pointId: newPointId,
+      dataUrl: ph.dataUrl,
+      createdAt: Date.now()
+    });
+  }
+
+  localStorage.setItem(ficheStorageKey(newFicheId), JSON.stringify(importedState));
+
+  const index = loadFichesIndex();
+  index.push({ id: newFicheId, name: makeFicheLabel(importedState) + " (import)", updatedAt: Date.now() });
+  saveFichesIndex(index);
+
+  setCurrentFicheId(newFicheId);
+  state = importedState;
+  ensureSignatures();
+  await render();
+  initSignatures(true);
+  refreshFicheSelect();
+  alert("✅ Fiche importée");
+};
+
 /* =========================
    Render
 ========================= */
@@ -577,7 +680,7 @@ const renderPoint = (p, idx, photos) => {
 
       <div class="row" style="margin-top:12px;">
         <div>
-          <label>Nb point lumineux (obligatoire)</label>
+          <label>N° point lumineux (obligatoire)</label>
           <input style="${numeroStyle}" value="${escapeHtml(p.numero)}" data-k="numero" placeholder="Ex: PL-12 / A22" />
         </div>
         <div>
@@ -812,7 +915,7 @@ const handlePointsEvents = () => {
           saveState();
           await render();
         },
-        (err) => alert("GPS refusé ou indisponible : " + err.message),
+        (err) => alert("GPS indisponible. Vérifie HTTPS + autorisation Safari. Détail : " + err.message),
         { enableHighAccuracy: true, timeout: 10000 }
       );
       return;
@@ -916,11 +1019,13 @@ const setupSignaturePad = (canvasId, clearBtnId, key) => {
   canvas.addEventListener("touchmove", move, { passive:false });
   canvas.addEventListener("touchend", end, { passive:false });
 
-  clearBtn.addEventListener("click", () => {
+  /* ✅ FIX IMPORTANT : éviter accumulation listeners sur bouton Effacer */
+  const onClear = () => {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     state.chantier.signatures[key] = "";
     saveState();
-  });
+  };
+  clearBtn.addEventListener("click", onClear);
 
   // cleanup handlers
   sigCleanup.push(() => {
@@ -930,6 +1035,7 @@ const setupSignaturePad = (canvasId, clearBtnId, key) => {
     canvas.removeEventListener("touchstart", start);
     canvas.removeEventListener("touchmove", move);
     canvas.removeEventListener("touchend", end);
+    clearBtn.removeEventListener("click", onClear);
   });
 };
 
@@ -1025,7 +1131,7 @@ const buildPdfBody = async () => {
         <thead>
           <tr>
             <th style="border:1px solid #ddd;padding:8px;background:#f3f4f6;text-align:left;width:4%;">#</th>
-            <th style="border:1px solid #ddd;padding:8px;background:#f3f4f6;text-align:left;width:10%;">Nb point</th>
+            <th style="border:1px solid #ddd;padding:8px;background:#f3f4f6;text-align:left;width:10%;">N° point</th>
             <th style="border:1px solid #ddd;padding:8px;background:#f3f4f6;text-align:left;width:40%;">Non-conformité / Observation</th>
             <th style="border:1px solid #ddd;padding:8px;background:#f3f4f6;text-align:left;width:16%;">Photos</th>
             <th style="border:1px solid #ddd;padding:8px;background:#f3f4f6;text-align:left;width:18%;">Localisation</th>
@@ -1058,56 +1164,50 @@ const buildPdfBody = async () => {
   `;
 };
 
-const exportPDF = async () => {
+/* =========================
+   EXPORT PDF & PARTAGE
+========================= */
+const exportPDF = async (action = "save") => {
   let container = null;
-  let previewWin = null;
 
   try {
-    // ouvrir tout de suite (sinon pop-up bloquée sur iPad)
-    previewWin = window.open("", "_blank");
-    if (!previewWin) {
-      alert("Pop-up bloquée. Autorise les pop-ups (Safari).");
-      return;
-    }
-    previewWin.document.write("<p style='font-family:system-ui'>Génération du PDF…</p>");
-
-    // validation minimum
+    // 1. Validation : vérifier si tous les points ont un numéro
     const missing = state.points
       .map((p, i) => (!String(p.numero || "").trim() ? `Point ${i+1}` : null))
       .filter(Boolean);
+      
     if (missing.length) {
       alert("Numéro obligatoire manquant pour : " + missing.join(", "));
-      previewWin.close();
       return;
     }
 
+    // 2. Afficher l'écran de chargement
     byId("pdfLoading").style.display = "flex";
 
-    // container rendu
+    // 3. Préparation du conteneur invisible pour le rendu
     container = document.createElement("div");
-    container.style.position = "fixed";
-    container.style.left = "0";
+    container.style.position = "absolute";
+    container.style.left = "-9999px"; 
     container.style.top = "0";
-    container.style.width = "794px"; // A4 @96dpi env.
+    container.style.width = "794px"; 
     container.style.background = "#fff";
-    container.style.visibility = "hidden"; // iPad: invisible mais rendu OK
-    container.style.pointerEvents = "none";
-    container.style.zIndex = "9999";
+    container.style.zIndex = "-1";
 
     container.innerHTML = await buildPdfBody();
     document.body.appendChild(container);
 
-    // attendre paint + fonts + images
+    // Attente du rendu (images, polices, etc.)
     await new Promise(r => requestAnimationFrame(r));
     await new Promise(r => requestAnimationFrame(r));
     if (document.fonts && document.fonts.ready) {
       try { await document.fonts.ready; } catch(e) {}
     }
     await waitForImages(container);
-    await new Promise(r => setTimeout(r, 150));
+    await new Promise(r => setTimeout(r, 200));
 
+    // 4. Capture du HTML vers Canvas
     const canvas = await html2canvas(container, {
-      scale: 1.6,
+      scale: 1.3,
       useCORS: true,
       allowTaint: false,
       backgroundColor: "#ffffff",
@@ -1115,60 +1215,83 @@ const exportPDF = async () => {
       imageTimeout: 20000
     });
 
+    // 5. Création du PDF avec jsPDF
     const { jsPDF } = window.jspdf;
     const pdf = new jsPDF({ unit: "mm", format: "a4", orientation: "portrait" });
 
     const pdfW = pdf.internal.pageSize.getWidth();
     const pdfH = pdf.internal.pageSize.getHeight();
-    const M = 8;
+    const M = 8; 
     const usableW = pdfW - 2 * M;
     const usableH = pdfH - 2 * M;
 
     const imgW = usableW;
     const imgH = canvas.height * (imgW / canvas.width);
 
+    // Gestion du multi-pages
     if (imgH <= usableH) {
-      const imgData = canvas.toDataURL("image/jpeg", 0.95);
+      const imgData = canvas.toDataURL("image/jpeg", 0.90);
       pdf.addImage(imgData, "JPEG", M, M, imgW, imgH);
     } else {
       const pageCanvas = document.createElement("canvas");
       const pageCtx = pageCanvas.getContext("2d");
-
       const pageHpx = Math.floor(canvas.width * (usableH / usableW));
       let y = 0;
       let first = true;
 
       while (y < canvas.height) {
         const sliceH = Math.min(pageHpx, canvas.height - y);
-
         pageCanvas.width = canvas.width;
         pageCanvas.height = sliceH;
-
         pageCtx.clearRect(0, 0, pageCanvas.width, pageCanvas.height);
         pageCtx.drawImage(canvas, 0, y, canvas.width, sliceH, 0, 0, pageCanvas.width, sliceH);
 
-        const pageImg = pageCanvas.toDataURL("image/jpeg", 0.95);
+        const pageImg = pageCanvas.toDataURL("image/jpeg", 0.90);
         const pageImgH_mm = (sliceH * imgW) / canvas.width;
 
         if (!first) pdf.addPage();
         first = false;
-
         pdf.addImage(pageImg, "JPEG", M, M, imgW, pageImgH_mm);
         y += sliceH;
       }
     }
 
+    // 6. Fin du chargement
     byId("pdfLoading").style.display = "none";
 
-    const blob = pdf.output("blob");
-    const url = URL.createObjectURL(blob);
-    previewWin.location.href = url;
-    setTimeout(() => URL.revokeObjectURL(url), 60000);
+    // 7. LOGIQUE DE SORTIE (Sauvegarde ou Partage)
+    const nomCommune = state.chantier.commune ? state.chantier.commune.replace(/[^a-zA-Z0-9]/g, "_") : "Fiche";
+    const nomFichier = `PV_Reserves_${nomCommune}.pdf`;
+
+    if (action === "share") {
+      // Transformation en fichier réel pour le partage
+      const blob = pdf.output("blob");
+      const file = new File([blob], nomFichier, { type: "application/pdf" });
+      
+      // Tentative de partage natif (iOS/Android/Navigateurs récents)
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        try {
+          await navigator.share({
+            files: [file],
+            title: 'PV de Réception - ' + nomCommune,
+            text: 'Ci-joint le rapport de réception de chantier.'
+          });
+        } catch (err) {
+          // Si l'utilisateur annule le partage, on ne fait rien de particulier
+          console.log("Partage annulé ou échoué", err);
+        }
+      } else {
+        alert("Le partage n'est pas supporté sur ce navigateur. Le PDF va être téléchargé.");
+        pdf.save(nomFichier);
+      }
+    } else {
+      // Sauvegarde standard
+      pdf.save(nomFichier);
+    }
 
   } catch (e) {
     byId("pdfLoading").style.display = "none";
-    alert("Erreur PDF : " + (e?.message || e));
-    if (previewWin && !previewWin.closed) previewWin.close();
+    alert("Erreur technique lors de la création du PDF : " + (e?.message || e));
   } finally {
     if (container) container.remove();
   }
@@ -1185,7 +1308,11 @@ const bindButtons = () => {
     window.scrollTo({ top: document.body.scrollHeight, behavior: "smooth" });
   });
 
-  byId("pdfBtn").addEventListener("click", exportPDF);
+  // Le bouton classique télécharge
+  byId("pdfBtn").addEventListener("click", () => exportPDF("save"));
+  
+  // Le nouveau bouton lance le menu de partage
+  byId("sharePdfBtn").addEventListener("click", () => exportPDF("share"));
 
   // vider la fiche courante (sans toucher les autres fiches)
   byId("resetBtn").addEventListener("click", async () => {
@@ -1278,6 +1405,23 @@ const bindFichesUI = () => {
 
     refreshFicheSelect();
     alert("🗑️ Fiche supprimée");
+  });
+
+  /* ✅ NEW: export/import */
+  byId("exportJsonBtn").addEventListener("click", exportCurrentFicheToJson);
+
+  const fileInput = byId("importJsonInput");
+  byId("importJsonBtn").addEventListener("click", () => fileInput.click());
+  fileInput.addEventListener("change", async () => {
+    const f = fileInput.files?.[0];
+    if (!f) return;
+    try {
+      await importFicheFromJsonFile(f);
+    } catch (e) {
+      alert("Import impossible : " + (e?.message || e));
+    } finally {
+      fileInput.value = "";
+    }
   });
 };
 
